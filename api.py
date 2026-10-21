@@ -46,6 +46,7 @@ from rag import (
     search_knowledge,
     debug_retrieval,
 )
+import skills
 from tasks import get_task_status, submit_index_task
 from tickets import (
     approve_ticket,
@@ -317,6 +318,41 @@ def calculate_total(price: float, quantity: int) -> str:
 
 
 @tool
+def list_skills() -> str:
+    """列出当前可用的技能清单（名称 + 适用场景）。
+
+    遇到不确定流程的请求时先调用它，再决定加载哪个技能。
+    """
+
+    items = skills.discover()
+    if not items:
+        return "当前没有可用技能。"
+
+    lines = [f"共 {len(items)} 个技能，用 load_skill 加载完整流程：", ""]
+    for item in items:
+        lines.append(f"- {item.name}：{item.description}")
+    print(f"[Skill] 列出 {len(items)} 个技能")
+    return "\n".join(lines)
+
+
+@tool
+def load_skill(name: str) -> str:
+    """加载指定技能的完整流程说明。
+
+    参数 name 必须是 list_skills 返回的名称之一。
+    """
+
+    skill = skills.get(name)
+    if skill is None:
+        available = "、".join(s.name for s in skills.discover()) or "（无）"
+        print(f"[Skill] 未找到：{name}")
+        return f"没有名为 {name} 的技能。可用技能：{available}"
+
+    print(f"[Skill] 加载 {skill.name}")
+    return skill.content
+
+
+@tool
 def create_refund_request(order_id: str, reason: str) -> str:
     """为用户提交退款申请。这是写操作，执行前需要人工审批。"""
 
@@ -404,7 +440,13 @@ async def lifespan(app: FastAPI):
 
         app.state.agent = create_agent(
             model=llm,
-            tools=[search_shop_info, calculate_total, create_refund_request],
+            tools=[
+                search_shop_info,
+                calculate_total,
+                create_refund_request,
+                list_skills,
+                load_skill,
+            ],
             system_prompt=(
                 "你是一个中文店铺智能客服。"
                 "始终使用简体中文回答，不要输出英文句子或英文开场白。"
@@ -416,6 +458,15 @@ async def lifespan(app: FastAPI):
                 "需要计算订单金额时，调用 calculate_total。"
                 "用户明确要求提交退款申请时，调用 create_refund_request，"
                 "需要订单号和退款原因；信息不全先向用户问清楚，不要编造。"
+                # 技能说明只占一行。具体流程放在 skills/ 里按需加载，
+                # 不塞进 prompt —— 否则每轮都付固定 token 成本。
+                "处理退款、投诉、知识库查询等多步骤任务时，"
+                "先调用 list_skills 查看可用技能，再用 load_skill 加载对应流程，"
+                "严格按加载到的步骤执行。"
+                # 用户不需要知道 agent 内部怎么组织能力。
+                # 说了会让人感觉在跟一个系统对话，而不是跟客服对话。
+                "不要向用户提及技能、工具、加载、检索等内部机制，"
+                "直接给出处理结果即可。"
             ),
             middleware=[
                 # 只拦写操作。检索和计算这类只读工具不需要审批，
@@ -507,6 +558,23 @@ def ready():
             "checks": checks,
         },
     )
+
+
+@app.get("/skills")
+def api_list_skills():
+    """技能清单与体积统计。
+
+    stats 里的 saved_chars 是渐进加载省下的字符数——
+    用来证明这个机制不是花架子：如果 skill 很少，省不了多少。
+    """
+    items = skills.discover()
+    return {
+        "skills": [
+            {"name": it.name, "description": it.description, "path": str(it.path)}
+            for it in items
+        ],
+        "stats": skills.stats(),
+    }
 
 
 @app.get("/tickets")

@@ -40,8 +40,8 @@
 **2. 写操作人工审批**
 退款申请这类有副作用的操作会通过 LangGraph `interrupt` 暂停，前端弹出确认卡片，用户批准后才真正执行；拒绝则把理由反馈给模型，模型改口。
 
-**3. 双重幂等保护**
-接口层用图状态守卫（无待审批直接 409），工具层用业务幂等键（同一订单重复提交返回原单号）。用户双击、网络重试都不会重复建单。
+**3. 三层幂等保护**
+接口层用图状态守卫（无待审批直接 409），工具层查库判重（同一订单返回原单号），数据库层用部分唯一索引 `WHERE status='executed'` 兜住并发。前两层都是「读-判断-写」，只有数据库约束能真正防住竞态。
 
 **4. 可量化的评测体系**
 50 条人工标注测试集（简单 20 / 改写 15 / 多跳 5 / 近邻难负例 10），分 hold-out 集，三套脚本覆盖检索质量、证据核查、端到端任务成功率。
@@ -57,6 +57,11 @@ Redis 不可用时自动降级为进程内后台线程。这不是妥协——�
 
 **8. 工单状态机 + 审计**
 退款单从内存字典改为 SQLite 持久化，状态流转 `pending_approval → approved → executed`（或 `rejected` / `failed`）。非法迁移被拒绝，同一订单只能有一张 `executed` 工单——这条规则由**数据库部分唯一索引**保证，不靠代码判重。
+
+**9. 渐进加载的 Skill 机制**
+流程知识（退款五步流程、投诉升级判断、检索降级策略）不再塞进 system prompt，而是拆成 `skills/` 下的独立目录。模型先调 `list_skills` 看目录（名称 + 适用场景），判断相关才用 `load_skill` 加载正文。
+
+实测：3 个技能的目录共 252 字，全量正文 2857 字，**压缩比 11.3 倍**。加一个技能只需加一个目录，不改代码、不动 prompt。
 
 ---
 
@@ -146,7 +151,7 @@ celery -A celery_app.celery_app worker --loglevel=info --pool=solo
 ### 跑测试
 
 ```bash
-pytest                    # 74 个用例，约 24 秒，不调用大模型
+pytest                    # 96 个用例，约 48 秒，不调用大模型
 pytest -m llm             # 需要真实模型的端到端测试
 ```
 
@@ -321,6 +326,7 @@ pending_approval → approved → executed
 | GET | `/knowledge/documents` | 文档列表 |
 | DELETE | `/knowledge/documents/{id}` | 删除文档 |
 | GET | `/tickets` | 工单列表（审批审计记录） |
+| GET | `/skills` | 技能清单与体积统计 |
 | GET | `/health` | 存活探针 |
 | GET | `/ready` | 就绪探针（校验向量库 / 工单库 / 会话库） |
 | POST | `/rag/debug` | 检索调试（返回排名与距离） |
@@ -345,6 +351,7 @@ test_answerability.py   证据核查（verify_evidence）
 celery_app.py           Celery 配置（broker / backend / 重试策略）
 tasks.py                索引任务、任务派发、降级与状态查询
 tickets.py              工单状态机与持久化（部分唯一索引保证幂等）
+skills/                 Skill 机制（registry.py + 三个技能目录）
 migrate_tenant.py       给存量向量块补 tenant 元数据
 perf.py                 分阶段耗时采样（P50/P95）
 perf_report.py          性能报告与瓶颈判断
@@ -361,13 +368,14 @@ knowledge.html          知识库管理界面
 knowledge/              22 篇语料（20 篇公共 + 2 篇租户专属）
 docs/screenshots/       README 用的界面截图
 
-tests/                  pytest 用例（74 个，24 秒）
+tests/                  pytest 用例（96 个，48 秒）
   test_sessions.py        会话 CRUD 与会话隔离
   test_knowledge.py       异步索引、去重、超限
   test_retrieval.py       检索策略与索引完整性
   test_chat_sse.py        SSE 协议与审批流程（FakeAgent）
   test_tenant.py          多租户权限过滤
   test_tickets.py         工单状态机
+  test_skills.py          Skill 扫描、解析、渐进加载
   test_hitl_http.py       真实模型端到端（标记 llm，默认跳过）
 
 conftest.py             pytest 夹具（含 FakeAgent、工单库隔离）
