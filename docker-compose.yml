@@ -1,0 +1,72 @@
+# 四个服务：redis（broker）+ app（API）+ worker（索引任务）
+#
+# 为什么 worker 要单独一个容器：
+# 索引任务会加载 embedding 模型（几百 MB 内存），和 API 抢内存没必要；
+# 而且 worker 挂了不该影响 API，API 挂了 worker 还能把队列里积压的任务跑完。
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: shop-agent-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: shop-agent:latest
+    container_name: shop-agent
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - ${HF_CACHE_DIR:-./hf_cache}:/root/.cache/huggingface
+      - ./vector_db:/app/vector_db
+      - ./uploads:/app/uploads
+      - ./sessions.sqlite:/app/sessions.sqlite
+      - ./chat_memory.sqlite:/app/chat_memory.sqlite
+      - ./tickets.sqlite:/app/tickets.sqlite
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    image: shop-agent:latest
+    container_name: shop-agent-worker
+    # --pool=solo：embedding 模型不是 fork 安全的，prefork 多进程容易出怪问题。
+    # 单并发对这个项目足够，索引任务本来就是低频长任务。
+    command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo --concurrency=1
+    env_file:
+      - .env
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - ${HF_CACHE_DIR:-./hf_cache}:/root/.cache/huggingface
+      - ./vector_db:/app/vector_db
+      - ./uploads:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis_data:

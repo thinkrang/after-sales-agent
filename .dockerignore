@@ -1,0 +1,24 @@
+# 密钥绝对不能进镜像。运行时通过 docker compose 的 env_file 注入。
+.env
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# 运行期数据：应该用 volume 挂载，不该打进镜像
+# （knowledge/ 反过来要打进镜像 —— 它是静态语料，只有几十 KB，
+#   打进去镜像才能开箱即用，不用额外挂载）
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+vector_db/
+uploads/
+
+# 本地工具与文档
+.idea/
+.git/
+.gitignore
+*.md
+!README.md

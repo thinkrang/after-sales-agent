@@ -1,0 +1,472 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Mini Agent - 知识库管理</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #edf2f9;
+            font-family: Arial, sans-serif;
+            color: #18314b;
+        }
+
+        .container {
+            max-width: 950px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .back {
+            color: #2769d8;
+            text-decoration: none;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 22px;
+            box-shadow: 0 3px 15px #d9e2ed66;
+        }
+
+        .upload-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .upload-row input {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px;
+            border: 1px solid #d5dfec;
+            border-radius: 8px;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            padding: 11px 17px;
+            background: #2769d8;
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .secondary {
+            background: #e9eff7;
+            color: #18314b;
+        }
+
+        .delete {
+            background: #fff0f0;
+            color: #c53b3b;
+        }
+
+        .document {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 0;
+            border-bottom: 1px solid #edf1f6;
+        }
+
+        .document:last-child {
+            border-bottom: none;
+        }
+
+        .filename {
+            font-weight: bold;
+            overflow-wrap: anywhere;
+        }
+
+        .details {
+            color: #718096;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        #status {
+            margin-top: 15px;
+            color: #247044;
+        }
+
+        .hint {
+            color: #718096;
+            font-size: 13px;
+        }
+
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+    </style>
+</head>
+
+<body>
+
+<main class="container">
+
+    <!-- 页面顶部 -->
+    <header class="header">
+        <h1>📚 知识库管理</h1>
+        <a href="/" class="back">← 返回聊天</a>
+    </header>
+
+    <!-- 上传区域 -->
+    <section class="card">
+        <h2>上传新文档</h2>
+
+        <div class="upload-row">
+
+            <input
+                type="file"
+                id="fileInput"
+                accept=".txt,.md,.pdf"
+            >
+
+            <button id="uploadBtn">
+                上传文档
+            </button>
+
+        </div>
+
+        <p class="hint">
+            支持 TXT、Markdown 和可提取文字的 PDF 文件，
+            最大 5MB，PDF 最多 20 页。
+        </p>
+
+        <p id="status" role="status"></p>
+    </section>
+
+    <!-- 文档列表 -->
+    <section class="card">
+
+        <div class="section-title">
+            <h2>已有文档</h2>
+
+            <button id="refreshBtn"
+                    class="secondary">
+                刷新列表
+            </button>
+        </div>
+
+        <div id="documentList">
+            正在读取知识库...
+        </div>
+
+    </section>
+
+</main>
+
+<script>
+
+const fileInput =
+    document.getElementById("fileInput");
+
+const uploadBtn =
+    document.getElementById("uploadBtn");
+
+const refreshBtn =
+    document.getElementById("refreshBtn");
+
+const documentList =
+    document.getElementById("documentList");
+
+const statusText =
+    document.getElementById("status");
+
+
+function showStatus(message, isError = false) {
+    statusText.textContent = message;
+    statusText.style.color =
+        isError ? "#c53b3b" : "#247044";
+}
+
+
+// 1. 加载知识库列表
+async function loadDocuments() {
+
+    const response = await fetch(
+        "/knowledge/documents"
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            result.detail || "加载列表失败"
+        );
+    }
+
+    documentList.replaceChildren();
+
+    const documents = result.documents;
+
+    if (documents.length === 0) {
+        documentList.textContent =
+            "暂无文档，请先上传 TXT 文件。";
+        return;
+    }
+
+    // 生成文档列表
+    for (const doc of documents) {
+
+        const row = document.createElement("div");
+        row.className = "document";
+
+        const info = document.createElement("div");
+
+        const name = document.createElement("div");
+        name.className = "filename";
+        name.textContent = "📄 " + doc.filename;
+
+        const details = document.createElement("div");
+        details.className = "details";
+
+        details.textContent =
+            doc.chunks + " 个文本块 · " +
+            (
+                doc.type === "uploaded"
+                    ? "网页上传"
+                    : "初始文档"
+            );
+
+        info.appendChild(name);
+        info.appendChild(details);
+        row.appendChild(info);
+
+        if (doc.type === "uploaded") {
+
+            const delBtn =
+                document.createElement("button");
+
+            delBtn.textContent = "删除";
+            delBtn.className = "delete";
+
+            delBtn.addEventListener(
+                "click",
+                () => deleteDocument(
+                    doc.doc_id,
+                    doc.filename
+                )
+            );
+
+            row.appendChild(delBtn);
+
+        } else {
+
+            const tag =
+                document.createElement("span");
+
+            tag.className = "hint";
+            tag.textContent = "内置文档";
+
+            row.appendChild(tag);
+        }
+
+        documentList.appendChild(row);
+    }
+}
+
+
+// 1.5 轮询索引任务状态
+// 上传接口现在只返回 task_id，解析和向量化在后台跑。
+// 这里每 800ms 查一次，最多等 60 秒。
+async function waitForTask(taskId) {
+
+    const deadline = Date.now() + 60000;
+
+    while (Date.now() < deadline) {
+
+        const response = await fetch(
+            "/knowledge/tasks/" + encodeURIComponent(taskId)
+        );
+
+        const data = await response.json();
+
+        if (data.status === "SUCCESS") {
+            return data;
+        }
+
+        if (data.status === "FAILURE") {
+            throw new Error(data.error || "索引失败");
+        }
+
+        showStatus(data.stage ? "索引中：" + data.stage : "索引中，请稍候…");
+
+        await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+
+    throw new Error("索引超时，请稍后在文档列表确认结果");
+}
+
+
+// 2. 上传文档
+uploadBtn.addEventListener("click", async () => {
+
+    const file = fileInput.files[0];
+
+    if (!file) {
+        showStatus("请先选择文件", true);
+        return;
+    }
+
+    const lowerName = file.name.toLowerCase();
+
+const allowed = [".txt", ".md", ".pdf"];
+
+if (!allowed.some(ext => lowerName.endsWith(ext))) {
+    showStatus(
+        "只支持 TXT、Markdown 和 PDF 文件",
+        true
+    );
+    return;
+}
+
+    if (file.size > 200 * 1024) {
+        showStatus("文件不能超过 5MB", true);
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = "正在上传...";
+
+    try {
+
+        const response = await fetch(
+            "/knowledge/upload",
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.detail || "上传失败"
+            );
+        }
+
+        // 接口只返回 task_id，索引在后台执行，这里等它完成
+        uploadBtn.textContent = "索引中...";
+        const done = await waitForTask(result.task_id);
+        const info = done.result || {};
+
+        showStatus(
+            info.duplicate
+                ? "该文档已存在，无需重复上传"
+                : "文档上传成功！"
+        );
+
+        fileInput.value = "";
+
+        await loadDocuments();
+
+    } catch (error) {
+
+        showStatus(error.message, true);
+
+    } finally {
+
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = "上传文档";
+    }
+});
+
+
+// 3. 删除文档
+async function deleteDocument(docId, filename) {
+
+    const confirmed = confirm(
+        "确定删除文档 " + filename +
+        " 吗？\n这会同时删除对应向量。"
+    );
+
+    if (!confirmed) return;
+
+    try {
+
+        const response = await fetch(
+            "/knowledge/documents/" +
+            encodeURIComponent(docId),
+            {
+                method: "DELETE"
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.detail || "删除失败"
+            );
+        }
+
+        showStatus("文档删除成功！");
+
+        await loadDocuments();
+
+    } catch (error) {
+
+        showStatus(error.message, true);
+    }
+}
+
+
+// 4. 刷新列表
+refreshBtn.addEventListener(
+    "click",
+    async () => {
+        try {
+            await loadDocuments();
+        } catch (error) {
+            showStatus(error.message, true);
+        }
+    }
+);
+
+
+// 页面加载时自动读取知识库
+loadDocuments().catch(error => {
+    showStatus(error.message, true);
+});
+
+</script>
+
+</body>
+</html>

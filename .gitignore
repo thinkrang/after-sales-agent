@@ -1,0 +1,39 @@
+# ============ 密钥 ============
+# 绝对不能提交。提交过一次，即使后来删掉，git 历史里仍然能翻出来。
+# 正确做法：仓库里放 .env.example，真实值只在本地和部署环境里配。
+.env
+.env.*
+!.env.example
+
+# ============ 运行期数据 ============
+# 这些是本地状态，别人 clone 下来不该继承你的会话和索引
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+vector_db/
+uploads/
+hf_cache/
+
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ============ 编辑器 / 系统 ============
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ============ 临时文件 ============
+*.log
+*.tmp
