@@ -4,6 +4,17 @@
 
 不是"能回答问题的客服机器人"，而是能走完一条业务流程的系统：答案有对错，操作有后果。
 
+![对话与人工审批](docs/screenshots/approval.png)
+
+<details>
+<summary>更多截图（欢迎页 / 深色模式）</summary>
+
+| 欢迎页 | 深色模式 |
+|---|---|
+| ![欢迎页](docs/screenshots/welcome.png) | ![深色模式](docs/screenshots/dark.png) |
+
+</details>
+
 ---
 
 ## 技术栈
@@ -328,7 +339,7 @@ status → (tool | token)* → interrupt 或 done
 
 ```
 api.py                  FastAPI 应用、会话管理、SSE、审批接口
-rag.py                  索引构建、文档增删、检索、证据格式化
+rag.py                  索引构建、文档增删、检索、证据格式化、多租户过滤
 retrieval.py            四种检索策略（vector / bm25 / hybrid / rerank）
 test_answerability.py   证据核查（verify_evidence）
 celery_app.py           Celery 配置（broker / backend / 重试策略）
@@ -345,11 +356,23 @@ tune_rrf.py             RRF 权重扫描
 rebuild_index.py        保留上传文档的重建索引
 seed_distractors.py     生成干扰文档
 download_reranker.py    下载 Reranker 模型
-index.html              聊天界面
+index.html              聊天界面（浅色 / 深色，支持 ?theme= 与 ?new=1）
 knowledge.html          知识库管理界面
+knowledge/              22 篇语料（20 篇公共 + 2 篇租户专属）
+docs/screenshots/       README 用的界面截图
+
 tests/                  pytest 用例（74 个，24 秒）
-conftest.py             pytest 夹具（含 FakeAgent）
+  test_sessions.py        会话 CRUD 与会话隔离
+  test_knowledge.py       异步索引、去重、超限
+  test_retrieval.py       检索策略与索引完整性
+  test_chat_sse.py        SSE 协议与审批流程（FakeAgent）
+  test_tenant.py          多租户权限过滤
+  test_tickets.py         工单状态机
+  test_hitl_http.py       真实模型端到端（标记 llm，默认跳过）
+
+conftest.py             pytest 夹具（含 FakeAgent、工单库隔离）
 pytest.ini              pytest 配置（默认跳过 llm 标记）
+scripts/probe_hitl.py   验证 interrupt 机制的最小实验
 Dockerfile / docker-compose.yml / requirements.txt
 ```
 
