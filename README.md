@@ -63,6 +63,18 @@ Redis 不可用时自动降级为进程内后台线程。这不是妥协——�
 
 实测：3 个技能的目录共 252 字，全量正文 2857 字，**压缩比 11.3 倍**。加一个技能只需加一个目录，不改代码、不动 prompt。
 
+**10. 并发吞吐：从 1.00x 到 17.4x**
+原来有一把全局锁包住整个 agent 调用，把系统完全串行化。压测实测（20 并发 / 单请求 0.8s）：
+
+| | 改造前 | 改造后 |
+|---|---|---|
+| 总耗时 | 16.04s | **0.92s** |
+| 吞吐 | 1.25 req/s | **21.79 req/s** |
+| P50 延迟 | 8.83s | **0.90s** |
+| 实际并行度 | 1.00x | **17.43x** |
+
+改动：拆锁（LangGraph 图本身无状态，状态在 checkpointer 按 thread_id 隔离）、SQLite 开 WAL、修连接泄漏、用长连接钉住 `-wal`/`-shm`（并发首写会竞争创建这两个文件，实测 8 线程里 7 个报 readonly）。
+
 ---
 
 ## 架构
@@ -151,7 +163,7 @@ celery -A celery_app.celery_app worker --loglevel=info --pool=solo
 ### 跑测试
 
 ```bash
-pytest                    # 96 个用例，约 48 秒，不调用大模型
+pytest                    # 104 个用例，约 27 秒，不调用大模型
 pytest -m llm             # 需要真实模型的端到端测试
 ```
 
@@ -352,6 +364,7 @@ celery_app.py           Celery 配置（broker / backend / 重试策略）
 tasks.py                索引任务、任务派发、降级与状态查询
 tickets.py              工单状态机与持久化（部分唯一索引保证幂等）
 skills/                 Skill 机制（registry.py + 三个技能目录）
+db.py                   SQLite 连接工厂（WAL / busy_timeout / 连接不泄漏）
 migrate_tenant.py       给存量向量块补 tenant 元数据
 perf.py                 分阶段耗时采样（P50/P95）
 perf_report.py          性能报告与瓶颈判断
@@ -368,7 +381,7 @@ knowledge.html          知识库管理界面
 knowledge/              22 篇语料（20 篇公共 + 2 篇租户专属）
 docs/screenshots/       README 用的界面截图
 
-tests/                  pytest 用例（96 个，48 秒）
+tests/                  pytest 用例（104 个，27 秒）
   test_sessions.py        会话 CRUD 与会话隔离
   test_knowledge.py       异步索引、去重、超限
   test_retrieval.py       检索策略与索引完整性
@@ -376,11 +389,13 @@ tests/                  pytest 用例（96 个，48 秒）
   test_tenant.py          多租户权限过滤
   test_tickets.py         工单状态机
   test_skills.py          Skill 扫描、解析、渐进加载
+  test_concurrency.py     连接层 + 串行化回归
   test_hitl_http.py       真实模型端到端（标记 llm，默认跳过）
 
 conftest.py             pytest 夹具（含 FakeAgent、工单库隔离）
 pytest.ini              pytest 配置（默认跳过 llm 标记）
 scripts/probe_hitl.py   验证 interrupt 机制的最小实验
+scripts/bench_concurrency.py  并发压测（对比锁的影响）
 Dockerfile / docker-compose.yml / requirements.txt
 ```
 
@@ -391,5 +406,5 @@ Dockerfile / docker-compose.yml / requirements.txt
 - **知识库规模小**（20 篇 / 20 个 chunk）。`Recall@5` 在此规模下必然接近 100%，真正有区分度的是 `Hit@1` 和 `MRR@10`。要让它有意义需要 100+ chunk。
 - **Agent 端到端 100% 是天花板问题**。题目与文档边界清晰，难负例的"缺失信息"都是文档里完全没出现过的概念，拒答偏容易。想做出区分度需要"边界可答性"题或"文档冲突"题。
 - **检索仍是纯向量**。BM25 融合已验证无收益，Reranker 因网络原因未接入（`download_reranker.py` 可补齐）。
-- **单进程串行**。Agent 执行有全局锁，同一时刻只处理一个请求，不适合并发场景。
+- **写操作仍是串行**。全局锁已拆除，读和 LLM 调用可以并发；但 SQLite 只允许一个写者，高并发写入仍需换 PostgreSQL。这是单机 SQLite 的固有限制，不是实现问题。
 - **写操作为模拟实现**。`create_refund_request` 存在内存字典里，重启即丢；真实项目应落库并加唯一索引。

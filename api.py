@@ -20,7 +20,6 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
 from typing import Any
 
 import perf
@@ -46,6 +45,8 @@ from rag import (
     search_knowledge,
     debug_retrieval,
 )
+import db
+from contextlib import closing
 import skills
 from tasks import get_task_status, submit_index_task
 from tickets import (
@@ -97,14 +98,10 @@ def _clip(text: Any, limit: int) -> str:
 # ---------------------------------------------------------------- 会话元信息
 
 
-def _session_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(SESSION_DB, timeout=10)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def init_session_db() -> None:
-    with _session_conn() as conn:
+    db.enable_wal(SESSION_DB)
+    db.hold(SESSION_DB)   # 钉住 -wal/-shm，避免并发首写竞争
+    with db.session(SESSION_DB) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -119,7 +116,7 @@ def init_session_db() -> None:
 
 
 def list_sessions() -> list[dict]:
-    with _session_conn() as conn:
+    with db.session(SESSION_DB) as conn:
         rows = conn.execute(
             "SELECT id, title, created_at, updated_at FROM sessions ORDER BY updated_at DESC"
         ).fetchall()
@@ -127,14 +124,14 @@ def list_sessions() -> list[dict]:
 
 
 def get_session(sid: str) -> dict | None:
-    with _session_conn() as conn:
+    with db.session(SESSION_DB) as conn:
         row = conn.execute("SELECT * FROM sessions WHERE id = ?", (sid,)).fetchone()
     return dict(row) if row else None
 
 
 def insert_session(sid: str, title: str) -> None:
     now = _now()
-    with _session_conn() as conn:
+    with db.session(SESSION_DB) as conn:
         conn.execute(
             "INSERT OR IGNORE INTO sessions (id, title, created_at, updated_at) VALUES (?,?,?,?)",
             (sid, title, now, now),
@@ -150,7 +147,7 @@ def _title_from(message: str | None) -> str:
 def touch_session(sid: str, first_message: str | None = None) -> str:
     """刷新会话时间；会话不存在则创建。首条消息会把「新对话」替换成真实标题。"""
     now = _now()
-    with _session_conn() as conn:
+    with db.session(SESSION_DB) as conn:
         row = conn.execute("SELECT title FROM sessions WHERE id = ?", (sid,)).fetchone()
 
         if row is None:
@@ -177,7 +174,7 @@ def touch_session(sid: str, first_message: str | None = None) -> str:
 
 
 def rename_session(sid: str, title: str) -> bool:
-    with _session_conn() as conn:
+    with db.session(SESSION_DB) as conn:
         cur = conn.execute(
             "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
             (title[:40], _now(), sid),
@@ -187,7 +184,7 @@ def rename_session(sid: str, title: str) -> bool:
 
 
 def remove_session_row(sid: str) -> bool:
-    with _session_conn() as conn:
+    with db.session(SESSION_DB) as conn:
         cur = conn.execute("DELETE FROM sessions WHERE id = ?", (sid,))
         conn.commit()
         return cur.rowcount > 0
@@ -245,7 +242,7 @@ def derive_title(agent, tid: str) -> str | None:
 def migrate_threads(agent) -> None:
     """把记忆库里已有、但会话表里没有的线程补录进来（只做一次）。"""
     try:
-        with sqlite3.connect(MEMORY_DB, timeout=10) as conn:
+        with closing(db.connect(MEMORY_DB, timeout=10)) as conn:
             ids = [r[0] for r in conn.execute("SELECT DISTINCT thread_id FROM checkpoints")]
     except sqlite3.Error:
         return
@@ -479,7 +476,6 @@ async def lifespan(app: FastAPI):
             checkpointer=memory,
         )
         app.state.memory = memory
-        app.state.agent_lock = Lock()
 
         init_tickets_table()
 
@@ -544,7 +540,7 @@ def ready():
         checks["tickets_db"] = {"ok": False, "error": str(exc)[:120]}
 
     try:
-        with sqlite3.connect(SESSION_DB, timeout=3) as conn:
+        with closing(db.connect(SESSION_DB, timeout=3)) as conn:
             conn.execute("SELECT 1 FROM sessions LIMIT 1")
         checks["session_db"] = {"ok": True}
     except Exception as exc:
@@ -777,11 +773,13 @@ def delete_document(doc_id: str):
 def chat(request: ChatRequest):
     config = {"configurable": {"thread_id": request.thread_id}}
     try:
-        with app.state.agent_lock:
-            result = app.state.agent.invoke(
-                {"messages": [{"role": "user", "content": request.message}]},
-                config=config,
-            )
+        # 不加锁。LangGraph 编译后的图是无状态的——会话状态在 checkpointer 里
+        # 按 thread_id 隔离，SqliteSaver 内部也有自己的锁保护写入。
+        # 在这里加全局锁会把整个 LLM 调用串行化，吞吐被压到 1/并发数。
+        result = app.state.agent.invoke(
+            {"messages": [{"role": "user", "content": request.message}]},
+            config=config,
+        )
         touch_session(request.thread_id, request.message)
         answer = _extract_text(result["messages"][-1].content)
         return {"thread_id": request.thread_id, "answer": answer}
@@ -841,36 +839,37 @@ def _stream_agent(payload, config: dict, title_source: str | None = None):
     yield _sse("status", {"text": "正在分析问题..."})
 
     try:
-        with app.state.agent_lock:
-            for token, metadata in app.state.agent.stream(
-                payload,
-                config=config,
-                stream_mode="messages",
-            ):
-                node = metadata.get("langgraph_node")
+        # 同 /chat：不加全局锁。不同 thread_id 的请求互不干扰，
+        # 真正需要串行的是 checkpoint 写入，那一层由 SqliteSaver 自己保证。
+        for token, metadata in app.state.agent.stream(
+            payload,
+            config=config,
+            stream_mode="messages",
+        ):
+            node = metadata.get("langgraph_node")
 
-                if node == "tools":
-                    if isinstance(token, ToolMessage):
-                        yield _sse("tool", {
-                            "name": getattr(token, "name", "") or "",
-                            "text": _clip(_extract_text(token.content), 600),
-                        })
-                    continue
+            if node == "tools":
+                if isinstance(token, ToolMessage):
+                    yield _sse("tool", {
+                        "name": getattr(token, "name", "") or "",
+                        "text": _clip(_extract_text(token.content), 600),
+                    })
+                continue
 
-                if node != "model":
-                    continue
+            if node != "model":
+                continue
 
-                if not isinstance(token, AIMessageChunk):
-                    continue
+            if not isinstance(token, AIMessageChunk):
+                continue
 
-                text = _extract_text(token.content)
-                if text:
-                    # 首字延迟（TTFT）是流式体验的核心指标：
-                    # 用户感知的是"多久看到第一个字"，不是总耗时。
-                    if first_token_at is None:
-                        first_token_at = time.perf_counter()
-                        perf.record("agent.ttft", (first_token_at - started) * 1000)
-                    yield _sse("token", {"text": text})
+            text = _extract_text(token.content)
+            if text:
+                # 首字延迟（TTFT）是流式体验的核心指标：
+                # 用户感知的是"多久看到第一个字"，不是总耗时。
+                if first_token_at is None:
+                    first_token_at = time.perf_counter()
+                    perf.record("agent.ttft", (first_token_at - started) * 1000)
+                yield _sse("token", {"text": text})
 
         # 流结束：区分"正常完成"和"停在审批点"
         perf.record("agent.stream_total", (time.perf_counter() - started) * 1000)

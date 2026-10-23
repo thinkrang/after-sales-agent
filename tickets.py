@@ -19,6 +19,8 @@
 """
 
 import sqlite3
+
+import db
 import threading
 import uuid
 from datetime import datetime
@@ -50,14 +52,11 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def init_tickets_table() -> None:
-    with _lock, _connect() as conn:
+    # WAL 只需设一次，放初始化里——每次连接都设会在并发下冲突
+    db.enable_wal(DB_PATH)
+    db.hold(DB_PATH)      # 钉住 -wal/-shm，避免并发首写竞争
+    with _lock, db.session(DB_PATH) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS refund_tickets (
@@ -133,7 +132,7 @@ def create_ticket(
     ticket_id = uuid.uuid4().hex[:16]
     now = _now()
 
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         conn.execute(
             """
             INSERT INTO refund_tickets
@@ -151,14 +150,14 @@ def create_ticket(
 
 
 def approve_ticket(ticket_id: str, operator: str = "local-user") -> bool:
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         return _transition(
             conn, ticket_id, APPROVED, decision="approve", operator=operator
         )
 
 
 def reject_ticket(ticket_id: str, reason: str = "", operator: str = "local-user") -> bool:
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         return _transition(
             conn, ticket_id, REJECTED, decision="reject", operator=operator,
             reason=reason or None,
@@ -171,7 +170,7 @@ def mark_executed(order_id: str, refund_id: str) -> bool:
     按 order_id 找最近一张 approved 的工单来标记，
     因为工具函数拿不到 ticket_id（参数由模型生成，不能塞私有字段）。
     """
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
             """
             SELECT id FROM refund_tickets
@@ -187,7 +186,7 @@ def mark_executed(order_id: str, refund_id: str) -> bool:
 
 
 def mark_failed(order_id: str, error: str = "") -> bool:
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
             """
             SELECT id FROM refund_tickets
@@ -203,7 +202,7 @@ def mark_failed(order_id: str, error: str = "") -> bool:
 
 def find_pending(thread_id: str) -> dict | None:
     """取该会话最近一张待审批工单。"""
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
             """
             SELECT * FROM refund_tickets
@@ -222,7 +221,7 @@ def has_executed(order_id: str) -> bool:
 
 def find_executed(order_id: str) -> dict | None:
     """取该订单执行成功的那张退款单。"""
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
             "SELECT * FROM refund_tickets WHERE order_id = ? AND status = ? LIMIT 1",
             (order_id, EXECUTED),
@@ -231,7 +230,7 @@ def find_executed(order_id: str) -> dict | None:
 
 
 def list_tickets(limit: int = 50) -> list[dict]:
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         rows = conn.execute(
             "SELECT * FROM refund_tickets ORDER BY created_at DESC LIMIT ?",
             (limit,),
@@ -240,7 +239,7 @@ def list_tickets(limit: int = 50) -> list[dict]:
 
 
 def get_ticket(ticket_id: str) -> dict | None:
-    with _lock, _connect() as conn:
+    with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
             "SELECT * FROM refund_tickets WHERE id = ?", (ticket_id,)
         ).fetchone()
