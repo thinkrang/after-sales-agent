@@ -8,6 +8,7 @@
    - paraphrase 换说法、换口语 → 考语义泛化
    - multihop   需要跨文档或做一步推理 → 考组合能力
    - negative   语义很近但关键信息缺失 → 考抗幻觉（最重要）
+   - coreference / slot_fill / switch  多轮三类 → 考上下文（带 history 字段）
 3. holdout=True 的题目只用于最终验收，不允许拿来调参、改 prompt。
    一旦你用它调过东西，它就不再是测试题了。
 
@@ -227,6 +228,95 @@ DATASET = [
     {"id": "N10", "type": "negative", "question": "安全培训考试不合格可以补考吗？",
      "expected_sources": ["employee_policy.md"], "expect_answerable": False,
      "must_include": ["无法", "没有", "未提及", "不包含"], "expect_refusal": True, "holdout": True},
+
+    # ==================== multi_turn：多轮对话，12 条 ====================
+    # history 是用户前几轮说过的话（按顺序回放，agent 每轮都会真实响应），
+    # question 是最后要评测的那一句。
+    #
+    # 为什么 expected_sources 留空：单轮检索评测用的是 question 单独一句，
+    # 而多轮题的"那这个"脱离上下文根本无法检索。混进去会污染 Hit@1 / MRR。
+    # 多轮看的是最终答案对不对，单独统计。
+    #
+    # 三类各 4 条：
+    #   coreference 指代消解——"那这个"到底指什么
+    #   slot_fill   信息补全——分几轮才把条件问全
+    #   switch      话题切换——中途换问题，不能串味
+
+    # ---- 指代消解 ----
+    {"id": "T01", "type": "coreference",
+     "history": ["我想买件跑步穿的裤子", "运动长裤怎么样？"],
+     "question": "那这个多少钱？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["89"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T02", "type": "coreference",
+     "history": ["商品编号002是什么？"],
+     "question": "多少钱一件？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["129"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T03", "type": "coreference",
+     "history": ["你们退货要几天内？"],
+     "question": "那超过7天还能退吗？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["不支持", "不能"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T04", "type": "coreference",
+     "history": ["会员怎么升级？"],
+     "question": "金卡要消费多少？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["5000"], "expect_refusal": False, "holdout": False},
+
+    # ---- 信息补全 ----
+    {"id": "T05", "type": "slot_fill",
+     "history": ["我想查一下库存"],
+     "question": "商品编号003的库存还有多少？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["80"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T06", "type": "slot_fill",
+     "history": ["付款后多久发货？"],
+     "question": "如果超过这个时间还没发呢？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["客服"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T07", "type": "slot_fill",
+     "history": ["订单能改收货地址吗？"],
+     "question": "那已经发货了呢？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["不可修改", "不能修改", "不能再修改", "无法修改"],
+     "expect_refusal": False, "holdout": False},
+
+    {"id": "T08", "type": "slot_fill",
+     "history": ["退款多久能到账？"],
+     "question": "具体几个工作日？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["1至3", "1-3", "1到3"], "expect_refusal": False, "holdout": False},
+
+    # ---- 话题切换 ----
+    {"id": "T09", "type": "switch",
+     "history": ["退款要几天内？"],
+     "question": "对了，你们客服几点上班？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["9:00", "9点", "21:00"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T10", "type": "switch",
+     "history": ["商品001多少钱？"],
+     "question": "换个问题，普通商品多久发货？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["48"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T11", "type": "switch",
+     "history": ["怎么申请退货？"],
+     "question": "那会员有什么权益？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["银卡", "金卡", "权益"], "expect_refusal": False, "holdout": False},
+
+    {"id": "T12", "type": "switch",
+     "history": ["商品002有货吗？"],
+     "question": "顺便问下，修改地址会影响发货吗？",
+     "expected_sources": [], "expect_answerable": True,
+     "must_include": ["延迟"], "expect_refusal": False, "holdout": False},
 ]
 
 
@@ -248,8 +338,25 @@ def answerability_cases(include_holdout: bool = True):
     return [c for c in DATASET if include_holdout or not c["holdout"]]
 
 
-def agent_cases(include_holdout: bool = True):
-    return [c for c in DATASET if include_holdout or not c["holdout"]]
+def agent_cases(include_holdout: bool = True, include_multiturn: bool = False):
+    """端到端评测的题目。
+
+    默认**不含**多轮题：多轮的判定口径不同（见 multiturn_cases），
+    混在一起会让"任务成功率"这个数字失去可比性。
+    """
+    return [
+        c for c in DATASET
+        if (include_holdout or not c["holdout"])
+        and (include_multiturn or not c.get("history"))
+    ]
+
+
+def multiturn_cases(include_holdout: bool = True):
+    """多轮题：靠 history 回放上下文，单独统计。"""
+    return [
+        c for c in DATASET
+        if c.get("history") and (include_holdout or not c["holdout"])
+    ]
 
 
 def stats():

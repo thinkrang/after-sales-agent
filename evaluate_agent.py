@@ -24,7 +24,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from api import _extract_text, app, remove_session_row
-from eval_dataset import agent_cases, stats
+from eval_dataset import agent_cases, multiturn_cases, stats
 
 # 默认期望调用的工具
 DEFAULT_TOOLS = {"search_shop_info"}
@@ -63,9 +63,24 @@ def extract_tools(messages) -> list[str]:
 
 
 def run_one(agent, case) -> dict:
-    """跑单个任务，返回结构化结果。"""
+    """跑单个任务，返回结构化结果。
+
+    多轮题（带 history）会先把前几轮逐条回放，让 agent **真实响应**每一轮。
+    不用"把历史拼成一条消息"的偷懒做法——那样 agent 从没回应过前几轮，
+    测不出 checkpointer 是否真的在累积状态，也就测不出多轮能力。
+    """
     tid = "eval_" + uuid.uuid4().hex[:12]
     config = {"configurable": {"thread_id": tid}}
+
+    # 逐轮回放，并记录每轮新增的消息边界
+    all_tools: list[str] = []
+    seen = 0
+    for turn in case.get("history") or []:
+        r = agent.invoke(
+            {"messages": [{"role": "user", "content": turn}]}, config=config
+        )
+        all_tools.extend(extract_tools(r["messages"][seen:]))
+        seen = len(r["messages"])
 
     start = time.perf_counter()
     result = agent.invoke(
@@ -74,9 +89,12 @@ def run_one(agent, case) -> dict:
     )
     elapsed = time.perf_counter() - start
 
-    messages = result["messages"]
-    tools = extract_tools(messages)
-    answer = _extract_text(messages[-1].content)
+    messages = result["messages"][seen:]
+    # 多轮题看整段对话调用过哪些工具：最后一句"那这个多少钱"完全可以
+    # 直接用上一轮的结果回答，不该因为没有新工具调用就判错。
+    all_tools.extend(extract_tools(messages))
+    tools = all_tools
+    answer = _extract_text(result["messages"][-1].content)
 
     # --- 判定 1：工具选择 ---
     if case["expect_refusal"]:
@@ -106,11 +124,15 @@ def run_one(agent, case) -> dict:
     }
 
 
-def evaluate(include_holdout: bool = True) -> dict:
-    cases = agent_cases(include_holdout=include_holdout)
+def evaluate(include_holdout: bool = True, multiturn: bool = False) -> dict:
+    cases = (
+        multiturn_cases(include_holdout=include_holdout)
+        if multiturn
+        else agent_cases(include_holdout=include_holdout)
+    )
 
     print("=" * 68)
-    print("端到端 Agent 评测")
+    print("端到端 Agent 评测 —— " + ("多轮对话" if multiturn else "单轮问答"))
     print("=" * 68)
 
     s = stats()
@@ -200,7 +222,9 @@ def evaluate(include_holdout: bool = True) -> dict:
 
     # 按题型拆
     print("\n按题型拆分：")
-    for t in ["easy", "paraphrase", "multihop", "negative"]:
+    types = (["coreference", "slot_fill", "switch"] if multiturn
+             else ["easy", "paraphrase", "multihop", "negative"])
+    for t in types:
         sub = [r for r in results if r["type"] == t]
         if not sub:
             continue
@@ -226,4 +250,14 @@ def evaluate(include_holdout: bool = True) -> dict:
 
 
 if __name__ == "__main__":
-    evaluate()
+    single = evaluate(multiturn=False)
+    print()
+    multi = evaluate(multiturn=True)
+
+    print("\n" + "=" * 68)
+    print("总览")
+    print("=" * 68)
+    print(f"  单轮任务成功率 : {single['passed']}/{single['total']}"
+          f" = {single['success_rate']:.0%}")
+    print(f"  多轮任务成功率 : {multi['passed']}/{multi['total']}"
+          f" = {multi['success_rate']:.0%}")
