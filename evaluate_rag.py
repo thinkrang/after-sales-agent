@@ -2,14 +2,27 @@
 
 指标口径
 --------
-- Recall@5   正确文档是否出现在前 5 条（线上只把 top-5 喂给模型）
+- Recall@3   正确文档是否出现在前 3 条 —— **这是线上真实口径**
+- Recall@5   正确文档是否出现在前 5 条
 - Hit@1      正确文档是否排第 1
 - MRR@10     正确文档排名的倒数和均值，衡量"排得够不够前"
 - P50 / P95  单次检索延迟分位数（已剔除首次模型加载）
 
-注意：当前知识库只有 20 个 chunk，top-5 覆盖 25% 的语料，
-Recall@5 天然接近 100%，区分度有限。
-真正能看出差异的是 Hit@1 和 MRR@10。
+为什么要单独盯 Recall@3
+-----------------------
+agent 的 search_shop_info 是 top_k=3（3 篇文档全文进证据核查）。
+以前这里只报 Recall@5，导致调权重时看的是一个生产用不上的指标：
+152 篇语料下 R@5 从 95.52% 涨到 97.01%（+1.5 点），
+看着收益很小；但同一组权重下 R@3 是从 91.04% 涨到 97.01%（+6 点）。
+
+**top_k 越小，漏召的代价越大**，所以 k 必须和线上一致。
+R@5 保留是为了和旧数据可比，不作为决策依据。
+
+租户口径
+--------
+TENANT = None 表示以"公共用户"视角评测（只看 public 文档）。
+评测集不涉及租户专属文档，这样最干净。线上用户会额外看到自己租户的文档，
+但那是权限边界，不是检索质量，混进来反而让指标不可比。
 """
 
 import time
@@ -18,13 +31,19 @@ from eval_dataset import retrieval_cases, stats
 from retrieval import STRATEGIES, reranker_ready
 
 TOP_K = 10
+
+# 线上真实口径：agent 的 search_shop_info 用 top_k=3
+PRODUCTION_TOP_K = 3
+
+# 保留旧口径用于和历史数据对比
 RECALL_AT = 5
 
+TENANT = None
+
 # 要对比的策略（按顺序）
-# hybrid 不在默认列表里：tune_rrf.py 实测任何 BM25 权重都会降低 Hit@1，
-# 当前语料下它没有收益空间（向量已 100% Recall@5）。
-# 想看负结果可以把它加回来对比。
-COMPARE = ["vector", "bm25", "hybrid_rerank"]
+# hybrid 现在进默认列表了：语料扩到 152 篇之后，
+# BM25 对「商品编号001」这类精确实体查询有真实收益（见 tune_rrf.py）。
+COMPARE = ["vector", "bm25", "hybrid", "hybrid_rerank"]
 
 
 def percentile(values: list[float], p: float) -> float:
@@ -44,13 +63,14 @@ def run_strategy(name: str, cases: list[dict]) -> dict:
 
     latencies = []
     hits = 0
+    hits3 = 0
     hit1 = 0
     rr_sum = 0.0
     detail = []
 
     for case in cases:
         start = time.perf_counter()
-        results = fn(case["question"], TOP_K)
+        results = fn(case["question"], TOP_K, tenant=TENANT)
         elapsed = time.perf_counter() - start
         latencies.append(elapsed)
 
@@ -62,6 +82,8 @@ def run_strategy(name: str, cases: list[dict]) -> dict:
 
         if rank is not None and rank <= RECALL_AT:
             hits += 1
+        if rank is not None and rank <= PRODUCTION_TOP_K:
+            hits3 += 1
         if rank == 1:
             hit1 += 1
         if rank is not None:
@@ -78,6 +100,7 @@ def run_strategy(name: str, cases: list[dict]) -> dict:
     return {
         "name": name,
         "total": total,
+        "recall3": hits3 / total,
         "recall": hits / total,
         "hit1": hit1 / total,
         "mrr": rr_sum / total,
@@ -96,7 +119,9 @@ def main():
     print("=" * 72)
     print(f"知识库规模：见下方 chunk 数；测试集 {s['total']} 条，"
           f"参与检索 {len(cases)} 条")
-    print(f"检索 k={TOP_K}，报告 Recall@{RECALL_AT} / Hit@1 / MRR@{TOP_K}")
+    print(f"检索 k={TOP_K}，报告 R@{PRODUCTION_TOP_K}（线上口径）/ "
+          f"R@{RECALL_AT} / Hit@1 / MRR@{TOP_K}")
+    print(f"租户视角：{TENANT or 'public（只看公共文档）'}")
     print()
 
     # ---------- 预热 ----------
@@ -106,7 +131,7 @@ def main():
             print(f"  {name:<14} 跳过：reranker 模型未就绪")
             continue
         t = time.perf_counter()
-        STRATEGIES[name]("预热", TOP_K)
+        STRATEGIES[name]("预热", TOP_K, tenant=TENANT)
         print(f"  {name:<14} {time.perf_counter() - t:.2f}s")
     print()
 
@@ -122,17 +147,20 @@ def main():
     print("=" * 72)
     print("对比结果")
     print("=" * 72)
-    print(f"{'策略':<16}{'Recall@5':>11}{'Hit@1':>10}{'MRR@10':>10}{'P50':>10}{'P95':>10}")
+    print(f"{'策略':<16}{'R@3*':>9}{'R@5':>9}{'Hit@1':>9}{'MRR@10':>9}"
+          f"{'P50':>9}{'P95':>9}")
     print("-" * 72)
+    print("* R@3 是线上口径（agent 用 top_k=3），决策以它为准")
 
     base = reports[0] if reports else None
     for r in reports:
         line = (f"{r['name']:<16}"
-                f"{r['recall']:>10.2%} "
-                f"{r['hit1']:>9.2%} "
-                f"{r['mrr']:>9.4f} "
-                f"{r['p50']:>9.1f}ms"
-                f"{r['p95']:>9.1f}ms")
+                f"{r['recall3']:>8.2%} "
+                f"{r['recall']:>8.2%} "
+                f"{r['hit1']:>8.2%} "
+                f"{r['mrr']:>8.4f} "
+                f"{r['p50']:>8.1f}ms"
+                f"{r['p95']:>8.1f}ms")
         print(line)
 
     if "hybrid_rerank" not in [r["name"] for r in reports]:
@@ -140,11 +168,20 @@ def main():
 
     # ---------- 提升幅度 ----------
     if len(reports) >= 2:
-        best = max(reports, key=lambda r: r["mrr"])
+        # 按 R@3 选：agent 只拿前 3 篇做证据核查，漏出前 3 就等于答不了。
+        # 以前按 MRR 选，MRR 衡量的是"整体排得好不好"，
+        # 对 top-3 这个硬边界不敏感。
+        best = max(reports, key=lambda r: (r["recall3"], r["mrr"]))
         print()
-        print(f"最优策略：{best['name']}")
-        print(f"  Hit@1   {base['hit1']:.2%} → {best['hit1']:.2%} "
-              f"({(best['hit1'] - base['hit1']) * 100:+.2f} 个百分点)")
+        print(f"按线上口径（R@3）最优策略：{best['name']}")
+        for key, label, fmt in [
+            ("recall3", "R@3  ", "{:.2%}"),
+            ("recall", "R@5  ", "{:.2%}"),
+            ("hit1", "Hit@1", "{:.2%}"),
+        ]:
+            a, b = base[key], best[key]
+            print(f"  {label}  {fmt.format(a)} → {fmt.format(b)} "
+                  f"({(b - a) * 100:+.2f} 个百分点)")
         print(f"  MRR@10  {base['mrr']:.4f} → {best['mrr']:.4f} "
               f"({best['mrr'] - base['mrr']:+.4f})")
 

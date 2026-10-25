@@ -23,6 +23,27 @@ index_lock = Lock()
 MODEL_NAME = "BAAI/bge-small-zh-v1.5"
 
 
+def _invalidate_bm25() -> None:
+    """索引变化后清掉 BM25 的内存语料缓存。
+
+    为什么要在这里做
+    ----------------
+    混合召回上线后，BM25 会把整库读进内存并缓存（retrieval._corpus）。
+    如果上传或删除文档后不清缓存，BM25 那一路会继续在旧语料里检索：
+    新文档搜不到、删掉的文档还能被召回。向量那一路是实时查 Chroma，
+    两条路的结果会互相矛盾，而且症状很隐蔽（只有部分查询不对）。
+
+    用延迟 import 而不是顶部 import：retrieval 依赖 rag，
+    反过来在模块级 import 会形成循环。
+    """
+    try:
+        import retrieval
+        retrieval.refresh_corpus()
+    except Exception as exc:  # noqa: BLE001
+        # 缓存清理失败不该让上传/删除整体失败，但要留下痕迹
+        print(f"[RAG] BM25 语料缓存清理失败：{type(exc).__name__}: {exc}")
+
+
 # 2. 初始化 Embedding 和向量数据库
 @lru_cache(maxsize=1)
 def get_vector_store():
@@ -150,6 +171,9 @@ def build_index():
     # 演示项目：重建整个知识库
     vector_store.reset_collection()
     vector_store.add_documents(chunks)
+
+    # 重建后 BM25 的语料快照已经全部失效
+    _invalidate_bm25()
 
     print(f"知识库构建完成，共 {len(chunks)} 个文本块")
 
@@ -369,6 +393,9 @@ def delete_knowledge_document(
         file_path = UPLOAD_DIR / f"{doc_id}{ext}"
         file_path.unlink(missing_ok=True)
 
+    # 删掉的文档不能再被 BM25 召回
+    _invalidate_bm25()
+
     return True
 
 def add_knowledge_document(
@@ -530,6 +557,9 @@ def add_knowledge_document(
                 pass
 
             raise
+
+    # 新文档要能被 BM25 那一路立刻检索到
+    _invalidate_bm25()
 
     print(
         f"[RAG] 文档上传成功：{safe_name}，"

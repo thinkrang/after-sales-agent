@@ -33,6 +33,7 @@ jobs:
       #   test_action_safety    44 条动作轨迹里的 36 条确定性场景
       #   test_tickets          状态机
       #   test_auth             认证四个关键点
+      #   test_single_retrieval_path  静态检查检索只有一条路径（AST，零依赖）
       #
       # -k "not run_one" 跳过 tests/test_eval_dataset.py 里三个懒加载
       # evaluate_agent 的用例：那会连带导入 api -> rag ->
@@ -45,6 +46,7 @@ jobs:
             tests/test_tickets.py \
             tests/test_risk.py \
             tests/test_action_safety.py \
+            tests/test_single_retrieval_path.py \
             tests/test_eval_dataset.py \
             tests/test_auth.py::test_password_hash_round_trip \
             tests/test_auth.py::test_access_token_round_trip_and_expiry \

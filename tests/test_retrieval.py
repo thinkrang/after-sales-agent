@@ -47,16 +47,42 @@ def test_bm25_empty_on_no_keyword_overlap():
     assert results == []
 
 
-def test_hybrid_falls_back_to_vector_when_bm25_weight_zero():
-    """当前配置 BM25 权重为 0，hybrid 应当与 vector 结果一致。
+def test_hybrid_equals_vector_when_bm25_weight_is_zero(monkeypatch):
+    """BM25 权重为 0 时，hybrid 必须退化成纯向量。
 
-    这条测试是在守护一个决策：我们实测 BM25 融合有害，
-    把权重设成 0 了。如果哪天有人改回非零权重，这条会失败，
-    提醒他先跑一遍评测再改。
+    这里显式把权重 patch 成 0，而不是依赖「当前配置恰好是 0」。
+    之前的写法把**融合逻辑的正确性**和**权重这个配置值**绑在一起：
+    一旦按评测结果调整权重，这条测试就红，但它红的原因不是逻辑坏了，
+    而是配置变了——真正的回归点（融合把向量结果改乱了）反而被淹没。
+
+    现在它只回答一个问题：RRF 在权重 0:1 时是不是等价于纯向量。
     """
-    vec = vector_retrieval(QUESTION, 5)
-    hyb = hybrid_retrieval(QUESTION, 5)
+    import retrieval
+
+    monkeypatch.setattr(retrieval, "VECTOR_WEIGHT", 1.0)
+    monkeypatch.setattr(retrieval, "BM25_WEIGHT", 0.0)
+
+    vec = retrieval.vector_retrieval(QUESTION, 5)
+    hyb = retrieval.hybrid_retrieval(QUESTION, 5)
     assert [r["source"] for r in vec] == [r["source"] for r in hyb]
+
+
+def test_configured_weights_are_documented():
+    """当前权重要能解释清楚，不能是个随手填的数。
+
+    这条不检查具体值（值会随语料变化），只检查它落在合法区间内、
+    且两路权重都非负 —— 防止有人填出负数或 NaN 让 RRF 静默错乱。
+    """
+    import math
+
+    import retrieval
+
+    for name in ("VECTOR_WEIGHT", "BM25_WEIGHT"):
+        value = getattr(retrieval, name)
+        assert isinstance(value, (int, float)), f"{name} 必须是数字"
+        assert not math.isnan(value), f"{name} 不能是 NaN"
+        assert 0.0 <= value <= 1.0, f"{name} 必须在 0~1 之间"
+    assert retrieval.VECTOR_WEIGHT + retrieval.BM25_WEIGHT > 0, "两路权重不能同时为 0"
 
 
 def test_retrieve_rejects_unknown_strategy():

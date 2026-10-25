@@ -99,3 +99,60 @@ def test_retrieval_respects_top_k_with_filter():
     results = debug_retrieval("卫衣", top_k=2, tenant="acme")
     assert len(results) <= 2
     assert [r["rank"] for r in results] == list(range(1, len(results) + 1))
+
+
+# ---------------------------------------------------------------- 策略层租户隔离
+#
+# 上面几条测的是 rag.debug_retrieval（底层原语）。
+# 但线上走的是 retrieval.retrieve（策略层），必须单独验证——
+# 混合召回里 BM25 那一路是自己扫全库打分的，很容易漏掉租户过滤。
+
+
+@pytest.mark.parametrize("strategy", ["vector", "bm25", "hybrid"])
+def test_strategy_layer_respects_tenant(strategy):
+    """每种策略都必须只返回可见租户的文档。
+
+    这条防的是一个很具体的疏漏：BM25 的打分是全局的，
+    如果筛租户的逻辑只写在向量那一路，混合召回就会把别人的文档带出来。
+    """
+    from retrieval import retrieve
+
+    for tenant, own, other in [
+        ("acme", ACME_DOC, GLOBEX_DOC),
+        ("globex", GLOBEX_DOC, ACME_DOC),
+    ]:
+        results = retrieve("卫衣的协议价是多少", top_k=5, strategy=strategy, tenant=tenant)
+        sources = [r["source"] for r in results]
+
+        assert own in sources, f"{strategy} 在 {tenant} 下没召回自己的协议价文档"
+        assert other not in sources, (
+            f"{strategy} 在 {tenant} 下召回了 {other} —— 跨租户泄露"
+        )
+
+
+@pytest.mark.parametrize("strategy", ["vector", "bm25", "hybrid"])
+def test_strategy_layer_hides_tenant_docs_from_public(strategy):
+    """不带租户（公共用户）时，两篇租户文档都不可见。"""
+    from retrieval import retrieve
+
+    results = retrieve("卫衣的协议价是多少", top_k=5, strategy=strategy, tenant=None)
+    sources = [r["source"] for r in results]
+
+    assert ACME_DOC not in sources
+    assert GLOBEX_DOC not in sources
+    assert sources, f"{strategy} 在公共视角下一条都没返回"
+
+
+def test_bm25_tenant_filter_truncates_after_filtering():
+    """top_k 必须作用在**筛选后**的结果上。
+
+    先截 top_k 再筛的话，可见文档会被无权限文档挤出候选，
+    表现是"明明库里有，却搜不到"。
+    """
+    from retrieval import bm25_retrieval
+
+    # 取很多条，确认返回的每一条都在可见范围内
+    results = bm25_retrieval("卫衣 协议价 退货 发货 会员", top_k=10, tenant="acme")
+    assert results
+    for item in results:
+        assert item.get("tenant") in visible_tenants("acme")

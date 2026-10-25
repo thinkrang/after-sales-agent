@@ -22,13 +22,14 @@ RRF（Reciprocal Rank Fusion）只用"排名"不用"分数"：
 天然免疫量纲问题，且对异常分数不敏感。k 一般取 60。
 """
 
+import os
 import re
 from functools import lru_cache
 
 import jieba
 from rank_bm25 import BM25Okapi
 
-from rag import debug_retrieval, get_vector_store
+from rag import DEFAULT_TENANT, debug_retrieval, get_vector_store, visible_tenants
 
 # RRF 常数，经验值 60
 RRF_K = 60
@@ -36,25 +37,40 @@ RRF_K = 60
 # 混合召回时每一路取多少候选
 CANDIDATES_PER_ROUTE = 10
 
-# RRF 融合权重：1.0 : 0.0（纯向量）。
+# RRF 融合权重：0.6 : 0.4。
 #
-# ⚠️ 重要前提：这个模块目前只被 evaluate_rag.py / tune_rrf.py 使用。
-# 线上 agent 走的是 rag.debug_retrieval()，那是另一条路径（直接调
-# similarity_search_with_score，带租户过滤，top_k=3）。两条路径没有统一，
-# 所以**这里的权重改了不会影响 agent 的回答**。
+# 这个模块是**唯一**的检索入口：evaluate_rag / tune_rrf 和线上 agent 的
+# search_shop_info 都走 retrieve()。租户过滤在策略内部完成，
+# 所以调这里的权重会真实影响 agent 的回答。
 #
-# 这个不一致是 2026-10-25 扩语料时发现的，见 README「已知问题」。
-# 在统一之前，下面的调参结论只对评测脚本成立，不能当作线上效果。
+# （2026-10-25 之前是两条路径：评测走 STRATEGIES，线上走
+#  rag.debug_retrieval。当时按评测调出来的权重对线上毫无影响。
+#  已统一，见 README。）
 #
-# 历史调参记录（仅供统一路径后参考）：
-#   22 chunk：1.0:0.0 Hit@1 92.11% / MRR 0.9561，任何非零 BM25 权重都掉点
-#   152 chunk：1.0:0.0 Recall@5 95.52% Hit@1 80.60%
-#              0.5:0.5 Recall@5 97.01% Hit@1 79.10%（Recall 涨、Hit@1 跌）
+# 关键是**用哪个 k 来评**。agent 实际是 top_k=3，所以要看 R@3，
+# 而不是评测脚本默认的 R@5。两者结论差很多：
 #
-# 152 chunk 下混合召回确实补回了漏召（"商品编号001"这类精确实体查询，
-# 向量会错配到别的 SKU，BM25 能精确命中），但那条路径 agent 用不上。
-VECTOR_WEIGHT = 1.0
-BM25_WEIGHT = 0.0
+#   向量:BM25      R@3      Hit@1     R@5      MRR
+#   1.0:0.0     91.04%    80.60%   95.52%   0.8532   ← 纯向量
+#   0.9:0.1     95.52%    77.61%   97.01%   0.8557
+#   0.7:0.3     97.01%    79.10%   97.01%   0.8731
+#   0.6:0.4     97.01%    79.10%   97.01%   0.8756   ← 选它
+#   0.5:0.5     97.01%    79.10%   97.01%   0.8731
+#   0.4:0.6     92.54%    83.58%   92.54%   0.8781   ← Hit@1 最高但 R@3 崩了
+#
+# 按 R@5 看只涨 1.5 个点，按 R@3 看涨 6 个点——**top_k 越小，漏召的代价越大**，
+# 所以权重对生产的影响比对评测指标的影响更明显。
+#
+# 0.4:0.6 那行值得注意：Hit@1 反而最高（83.58%），但 R@3 掉到 92.54%。
+# 说明 BM25 权重过高时会把个别对的文档顶到第 1，同时把另一些挤出前 3。
+# 只看 Hit@1 会选错。
+#
+# 换语料后请重跑 tune_rrf.py，这个结论不是永久的。
+VECTOR_WEIGHT = 0.6
+BM25_WEIGHT = 0.4
+
+# 线上默认策略。可用环境变量覆盖，方便灰度对比不同策略的端到端效果。
+DEFAULT_STRATEGY = os.getenv("RETRIEVAL_STRATEGY", "hybrid").strip() or "hybrid"
 
 # Reranker 模型（中文场景常用）
 RERANKER_MODEL = "BAAI/bge-reranker-base"
@@ -105,32 +121,55 @@ def _bm25():
 # ---------------------------------------------------------------- 各策略
 
 
-def vector_retrieval(question: str, top_k: int) -> list[dict]:
-    """纯向量检索，直接复用 rag.debug_retrieval 的口径。"""
-    return debug_retrieval(question=question, top_k=top_k)
+def vector_retrieval(
+    question: str, top_k: int, tenant: str | None = None
+) -> list[dict]:
+    """纯向量检索。
+
+    直接复用 rag.debug_retrieval —— 它是唯一直接访问 Chroma 的地方，
+    负责租户过滤（检索前过滤，不是检索后筛）和索引锁。
+    这里不重复实现，避免两条路径的过滤条件慢慢走偏。
+    """
+    return debug_retrieval(question=question, top_k=top_k, tenant=tenant)
 
 
-def bm25_retrieval(question: str, top_k: int) -> list[dict]:
-    """纯关键词检索。"""
+def bm25_retrieval(
+    question: str, top_k: int, tenant: str | None = None
+) -> list[dict]:
+    """纯关键词检索。
+
+    租户过滤只能在打分之后做：BM25 的 IDF 是全局统计量，
+    按租户重新分词会让同一句话在不同租户下得分不一致，很难解释。
+    所以先对全库打分、再按可见租户筛，最后截 top_k。
+
+    副作用要清楚：top_k 是在**筛选后**截断的，不是先截再筛，
+    否则可见文档会被无权限文档挤出候选。
+    """
     bm25, ids, docs, metas = _bm25()
     scores = bm25.get_scores(tokenize(question))
 
-    order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+    order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
 
+    allowed = set(visible_tenants(tenant))
     results = []
-    for rank, idx in enumerate(order, start=1):
+    for idx in order:
         if scores[idx] <= 0:
-            # BM25 分数为 0 表示没有任何词命中，没必要往下排
+            # BM25 分数为 0 表示没有任何词命中，后面的只会更低
             break
         meta = metas[idx] or {}
+        if (meta.get("tenant") or DEFAULT_TENANT) not in allowed:
+            continue
         results.append({
-            "rank": rank,
+            "rank": len(results) + 1,
             "id": ids[idx],
             "source": meta.get("source", "未知文档"),
+            "tenant": meta.get("tenant") or DEFAULT_TENANT,
             "page": meta.get("page"),
             "score": round(float(scores[idx]), 6),
             "content": docs[idx],
         })
+        if len(results) >= top_k:
+            break
     return results
 
 
@@ -154,19 +193,21 @@ def _rrf_fuse(
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
 
-def hybrid_retrieval(question: str, top_k: int) -> list[dict]:
+def hybrid_retrieval(
+    question: str, top_k: int, tenant: str | None = None
+) -> list[dict]:
     """向量 + BM25，加权 RRF 融合。
 
-    默认权重向量 0.8 / BM25 0.2：向量在本语料上明显更强
-    （BM25 对口语化改写失分严重），所以只给它少量话语权，
-    让它能在向量失手时起补救作用，而不是主导排序。
-
     两路各取 CANDIDATES_PER_ROUTE 个候选，融合后再截 top_k。
+
+    租户过滤在两路内部各自完成（向量交给 Chroma 的 where，
+    BM25 打分后按可见租户筛）。融合阶段只处理可见文档，
+    不会出现"无权限文档占了融合名次"的情况。
     """
     n = max(top_k, CANDIDATES_PER_ROUTE)
 
-    vec = vector_retrieval(question, n)
-    kw = bm25_retrieval(question, n)
+    vec = vector_retrieval(question, n, tenant=tenant)
+    kw = bm25_retrieval(question, n, tenant=tenant)
 
     ids, docs, metas = _corpus()
     id_to_idx = {doc_id: i for i, doc_id in enumerate(ids)}
@@ -219,7 +260,9 @@ def reranker_ready() -> bool:
     return _reranker() is not None
 
 
-def hybrid_rerank_retrieval(question: str, top_k: int) -> list[dict]:
+def hybrid_rerank_retrieval(
+    question: str, top_k: int, tenant: str | None = None
+) -> list[dict]:
     """混合召回 + CrossEncoder 精排。
 
     如果 reranker 不可用，自动降级为 hybrid，并在结果的 strategy 字段标注，
@@ -227,13 +270,13 @@ def hybrid_rerank_retrieval(question: str, top_k: int) -> list[dict]:
     """
     model = _reranker()
     if model is None:
-        out = hybrid_retrieval(question, top_k)
+        out = hybrid_retrieval(question, top_k, tenant=tenant)
         for item in out:
             item["strategy"] = "hybrid(降级)"
         return out
 
     # 召回阶段多取一些，给精排留出重排空间
-    candidates = hybrid_retrieval(question, max(top_k * 3, 10))
+    candidates = hybrid_retrieval(question, max(top_k * 3, 10), tenant=tenant)
 
     pairs = [(question, item["content"]) for item in candidates]
     scores = model.predict(pairs)
@@ -260,13 +303,24 @@ STRATEGIES = {
 }
 
 
-def retrieve(question: str, top_k: int = 10, strategy: str = "vector") -> list[dict]:
-    """统一检索入口。
+def retrieve(
+    question: str,
+    top_k: int = 10,
+    strategy: str | None = None,
+    tenant: str | None = None,
+) -> list[dict]:
+    """统一检索入口 —— 评测脚本和线上 agent 都走这里。
 
-    注意：线上 agent 不走这里，走 rag.debug_retrieval()（带租户过滤）。
-    两条路径尚未统一，见文件顶部权重注释与 README「已知问题」。
+    tenant 是**安全边界**，不是可选优化：它决定能在哪些文档里检索。
+    以前线上走 rag.debug_retrieval（带 tenant）、评测走 STRATEGIES（不带），
+    两条路径的策略和参数都不一样，评测结论没法代表线上效果。
+
+    现在租户过滤下沉到各策略内部：
+    - 向量：交给 Chroma 的 where 条件（检索前过滤）
+    - BM25：打分后按可见租户筛（IDF 是全局统计量，不能按租户重算）
     """
-    fn = STRATEGIES.get(strategy)
+    name = strategy or DEFAULT_STRATEGY
+    fn = STRATEGIES.get(name)
     if fn is None:
-        raise ValueError(f"未知策略：{strategy}，可选 {list(STRATEGIES)}")
-    return fn(question, top_k)
+        raise ValueError(f"未知策略：{name}，可选 {list(STRATEGIES)}")
+    return fn(question, top_k, tenant=tenant)

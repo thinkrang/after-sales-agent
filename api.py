@@ -43,9 +43,9 @@ from rag import (
     get_vector_store,
     list_knowledge_documents,
     search_knowledge,
-    debug_retrieval,
 )
 import db
+import retrieval
 from contextlib import closing
 import skills
 from tasks import get_task_status, submit_index_task
@@ -368,8 +368,15 @@ def search_shop_info(question: str, config: RunnableConfig) -> str:
     print(f"[RAG 工具调用] {question} (tenant={tenant or 'public'})")
 
     # 1. 检索文档并使用 LLM 判断是否有足够证据
+    #
+    # 走 retrieval.retrieve 而不是直接调 rag.debug_retrieval：
+    # 后者只做纯向量 top_k，是评测里被证明会漏召的那条路径
+    # （「商品编号001」会被相似 SKU 挤掉）。现在两条路径合并成一条，
+    # 策略和权重由 retrieval.py 统一决定，评测结论才对得上线上行为。
     with perf.stage("rag.retrieval"):
-        results = debug_retrieval(question=question, top_k=3, tenant=tenant)
+        results = retrieval.retrieve(
+            question, top_k=3, strategy=retrieval.DEFAULT_STRATEGY, tenant=tenant
+        )
 
     with perf.stage("rag.evidence_check"):
         verdict = verify_evidence(question, results)
@@ -530,6 +537,11 @@ class RagDebugRequest(BaseModel):
         ge=1,
         le=10
     )
+
+    # 默认 vector：这个端点的原始用途是看 Chroma 的 distance，
+    # 用来分析"距离阈值能不能区分可答/不可答"（见 README）。
+    # 想看 agent 实际拿到什么，传 strategy="hybrid" —— 那才是线上路径。
+    strategy: str = Field(default="vector", max_length=32)
 
 
 class LoginRequest(BaseModel):
@@ -873,9 +885,12 @@ def rag_debug(request: RagDebugRequest, user: CurrentUser):
     start = time.perf_counter()
 
     try:
-        results = debug_retrieval(
-            question=request.question,
+        # 走统一入口：vector 策略内部就是 rag.debug_retrieval（带 distance），
+        # 其它策略和线上 agent 完全同一条路。不需要在这里分支。
+        results = retrieval.retrieve(
+            request.question,
             top_k=request.top_k,
+            strategy=request.strategy,
             tenant=user.tenant_id,
         )
 
@@ -887,6 +902,7 @@ def rag_debug(request: RagDebugRequest, user: CurrentUser):
         return {
             "question": request.question,
             "top_k": request.top_k,
+            "strategy": request.strategy,
             "total": len(results),
             "latency_ms": elapsed_ms,
             "results": results,
