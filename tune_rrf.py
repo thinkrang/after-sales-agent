@@ -59,17 +59,39 @@ def main():
     print(f"{'向量:BM25':<14}{'Recall@5':>11}{'Hit@1':>10}{'MRR@10':>10}")
     print("-" * 46)
 
-    best = None
+    rows = []
     for wv, wb in GRID:
         r = score(wv, wb, cases)
+        rows.append((wv, wb, r))
         print(f"{wv:.1f}:{wb:.1f}{'':<8}{r['recall']:>10.2%} "
               f"{r['hit1']:>9.2%} {r['mrr']:>9.4f}")
-        if best is None or r["mrr"] > best[2]["mrr"]:
-            best = (wv, wb, r)
 
-    print(f"\n最优：向量 {best[0]:.1f} : BM25 {best[1]:.1f}"
-          f"（Hit@1 {best[2]['hit1']:.2%}，MRR@10 {best[2]['mrr']:.4f}）")
-    print("请把 retrieval.py 里的 VECTOR_WEIGHT / BM25_WEIGHT 改成这个值。")
+    # 三个指标不一定会指向同一个配置，所以分别报出来，不替使用者做决定。
+    # 之前这里只按 MRR 选"最优"，却把 Hit@1 一起打印出来，
+    # 看起来像是"MRR 最优的那个配置 Hit@1 也最好"——实际可能更差。
+    by_mrr = max(rows, key=lambda x: x[2]["mrr"])
+    by_hit = max(rows, key=lambda x: x[2]["hit1"])
+    by_recall = max(rows, key=lambda x: x[2]["recall"])
+
+    def line(tag, pick):
+        wv, wb, r = pick
+        return (f"  {tag:<10} 向量 {wv:.1f} : BM25 {wb:.1f}   "
+                f"Recall@5 {r['recall']:.2%}  Hit@1 {r['hit1']:.2%}  MRR {r['mrr']:.4f}")
+
+    print("\n各指标的最优配置：")
+    print(line("按 MRR", by_mrr))
+    print(line("按 Hit@1", by_hit))
+    print(line("按 Recall@5", by_recall))
+
+    same = by_mrr[:2] == by_hit[:2] == by_recall[:2]
+    print()
+    if same:
+        print("三个指标指向同一配置，可以放心改成这个值。")
+    else:
+        print("三个指标指向不同配置，需要按下游怎么用检索结果来决定：")
+        print("  - 只取 top-1 给用户看 → 看 Hit@1")
+        print("  - 把 top-k 全文喂给模型 → 看 Recall@5（漏召回比排序靠后更致命）")
+        print("本项目是后者：top_k 篇文档全文进证据核查，漏掉就没法答。")
 
 
 if __name__ == "__main__":

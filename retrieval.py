@@ -36,21 +36,23 @@ RRF_K = 60
 # 混合召回时每一路取多少候选
 CANDIDATES_PER_ROUTE = 10
 
-# RRF 融合权重：实测结论是「纯向量最优」，BM25 权重给到 0.1 都会掉点。
+# RRF 融合权重：1.0 : 0.0（纯向量）。
 #
-# 调参过程见 tune_rrf.py，在非 hold-out 的 38 条题上扫过 6 组权重：
-#     1.0:0.0  Hit@1 92.11%  MRR 0.9561   ← 最优
-#     0.9:0.1  Hit@1 86.84%  MRR 0.9189
-#     0.5:0.5  Hit@1 86.84%  MRR 0.9175
+# ⚠️ 重要前提：这个模块目前只被 evaluate_rag.py / tune_rrf.py 使用。
+# 线上 agent 走的是 rag.debug_retrieval()，那是另一条路径（直接调
+# similarity_search_with_score，带租户过滤，top_k=3）。两条路径没有统一，
+# 所以**这里的权重改了不会影响 agent 的回答**。
 #
-# 为什么 BM25 帮不上忙：测试集里大量是口语化改写
-# （"我想买件跑步穿的裤子" vs 文档里的"运动长裤"），
-# 字面零重叠，关键词匹配在原理上就无法命中。
-# 而 RRF 的 1/(k+rank) 在相邻名次间差异极小，
-# 只要 BM25 把某个文档排到第 1，0.1 的权重也足以翻转向量的头名。
+# 这个不一致是 2026-10-25 扩语料时发现的，见 README「已知问题」。
+# 在统一之前，下面的调参结论只对评测脚本成立，不能当作线上效果。
 #
-# 保留 hybrid 代码的原因：语料换成"包含大量精确实体（型号、编码、条款号）"
-# 的场景时，BM25 会有价值。当前语料下默认走 vector。
+# 历史调参记录（仅供统一路径后参考）：
+#   22 chunk：1.0:0.0 Hit@1 92.11% / MRR 0.9561，任何非零 BM25 权重都掉点
+#   152 chunk：1.0:0.0 Recall@5 95.52% Hit@1 80.60%
+#              0.5:0.5 Recall@5 97.01% Hit@1 79.10%（Recall 涨、Hit@1 跌）
+#
+# 152 chunk 下混合召回确实补回了漏召（"商品编号001"这类精确实体查询，
+# 向量会错配到别的 SKU，BM25 能精确命中），但那条路径 agent 用不上。
 VECTOR_WEIGHT = 1.0
 BM25_WEIGHT = 0.0
 
@@ -261,8 +263,8 @@ STRATEGIES = {
 def retrieve(question: str, top_k: int = 10, strategy: str = "vector") -> list[dict]:
     """统一检索入口。
 
-    默认走 vector —— 这是 tune_rrf.py 实测出来的最优策略，
-    不是拍脑袋选的。换成 hybrid 之前请先跑一次评测确认它真的更好。
+    注意：线上 agent 不走这里，走 rag.debug_retrieval()（带租户过滤）。
+    两条路径尚未统一，见文件顶部权重注释与 README「已知问题」。
     """
     fn = STRATEGIES.get(strategy)
     if fn is None:
