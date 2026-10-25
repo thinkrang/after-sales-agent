@@ -756,17 +756,74 @@ def api_list_skills(user: CurrentUser):
 
 
 @app.get("/tickets")
-def api_list_tickets(user: CurrentUser, limit: int = 50):
-    """工单列表，按创建时间倒序。也是审批的审计记录。"""
+def api_list_tickets(user: CurrentUser, limit: int = 50, pending_only: bool = False):
+    """工单列表，按创建时间倒序。也是审批的审计记录。
+
+    可见范围按角色分三档：
+    - admin：全部
+    - approver：本租户全部（审批人需要看到别人发起的单，否则没法审批）
+    - 其他人：只看自己发起的
+    """
+    size = max(1, min(limit, 200))
     if user.is_admin:
-        rows = list_tickets(limit=max(1, min(limit, 200)))
+        rows = list_tickets(limit=size)
+    elif user.has_role("approver"):
+        rows = list_tickets(limit=size, tenant_id=user.tenant_id)
     else:
         rows = list_tickets(
-            limit=max(1, min(limit, 200)),
-            tenant_id=user.tenant_id,
-            requester_id=user.username,
+            limit=size, tenant_id=user.tenant_id, requester_id=user.username
         )
+    if pending_only:
+        rows = [r for r in rows if r["status"] == "pending_approval"]
     return {"tickets": rows}
+
+
+class TicketDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str = Field(pattern=r"^(approve|reject)$")
+    message: str | None = Field(default=None, max_length=200)
+
+
+@app.post("/tickets/{ticket_id}/decision")
+def decide_ticket(ticket_id: str, request: TicketDecisionRequest, user: CurrentUser):
+    """主管审批入口：按工单处理，不要求会话归属。
+
+    和 /chat/resume 的区别是鉴权边界不同：
+    - /chat/resume 是客户在自己的会话里确认，要求 thread 归属 + 只能处理低风险
+    - 这里是审批人从队列处理，要求 approver 角色 + 同租户 + 不能是发起人
+
+    主管不在客户的会话里，图不会因为这次批准而恢复，所以批准后直接执行，
+    而不是等客户下次说话。
+    """
+    try:
+        outcome = refund_service.decide(
+            user,
+            approval_id=ticket_id,
+            decision=request.decision,
+            message=request.message,
+        )
+    except refund_service.ApprovalForbidden as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except refund_service.WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except orders.OrderNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    ticket = outcome.ticket
+
+    if outcome.status == "approved":
+        try:
+            ticket = refund_service.execute_for_ticket(ticket)
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("主管批准后执行失败 ticket=%s", ticket_id)
+            raise HTTPException(
+                status_code=502,
+                detail=f"已批准但执行失败，可运行 reconcile_refunds.py 恢复：{exc}",
+            ) from exc
+
+    logging.info("主管 %s 处理工单 %s -> %s", user.username, ticket_id, ticket["status"])
+    return {"ticket": ticket, "status": ticket["status"]}
 
 
 @app.get("/orders")
@@ -1097,8 +1154,27 @@ def _pending_actions(config: dict) -> list[dict]:
                             "product_name": order["product_name"],
                             "amount": f"{order['amount_cents'] / 100:.2f}",
                         }
+                        action_data["risk"] = _ticket_risk(ticket)
                 actions.append(action_data)
     return actions
+
+
+def _ticket_risk(ticket: dict) -> dict:
+    """把工单上的风险分级摊平给前端。
+
+    前端要能区分"客户点确认就行"和"必须找主管"，所以把 tier 和原因
+    一起带出去，而不是让前端自己判断金额。
+    """
+    try:
+        reasons = json.loads(ticket.get("risk_reasons") or "[]")
+    except (TypeError, ValueError):
+        reasons = []
+    return {
+        "tier": ticket.get("risk_tier") or "low",
+        "required_role": ticket.get("required_role") or "customer",
+        "reasons": reasons if isinstance(reasons, list) else [],
+        "rule_version": ticket.get("rule_version") or "",
+    }
 
 
 def _prepare_approval_actions(actions: list[dict], config: dict) -> list[dict]:
@@ -1127,6 +1203,7 @@ def _prepare_approval_actions(actions: list[dict], config: dict) -> list[dict]:
                 "product_name": order["product_name"],
                 "amount": f"{order['amount_cents'] / 100:.2f}",
             }
+            action["risk"] = _ticket_risk(ticket)
         except (orders.OrderNotFound, orders.RefundDenied) as exc:
             action["blocked_reason"] = str(exc)
         except Exception:
@@ -1290,6 +1367,9 @@ def chat_resume(request: ResumeRequest, user: CurrentUser):
                 thread_id=request.thread_id,
                 decision=request.decision,
             )
+        except refund_service.ApprovalForbidden as exc:
+            # 高风险单必须走主管路径，客户自己点确认会被挡在这里
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except refund_service.WorkflowConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except orders.OrderNotFound as exc:

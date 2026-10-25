@@ -23,7 +23,7 @@ import sqlite3
 import db
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from settings import DATA_DIR, ensure_data_dir
 
@@ -54,6 +54,25 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+# 后加的列。老库（CREATE TABLE 时代没有这些字段）需要 ALTER 补上，
+# 否则 SELECT * 出来的 dict 缺键，下游 .get() 全是默认值，很难排查。
+_ADDED_COLUMNS = {
+    "risk_tier": "TEXT NOT NULL DEFAULT 'low'",
+    "risk_reasons": "TEXT NOT NULL DEFAULT '[]'",
+    "required_role": "TEXT NOT NULL DEFAULT 'customer'",
+    "rule_version": "TEXT NOT NULL DEFAULT ''",
+}
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    existing = {
+        row["name"] for row in conn.execute("PRAGMA table_info(refund_tickets)")
+    }
+    for name, ddl in _ADDED_COLUMNS.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE refund_tickets ADD COLUMN {name} {ddl}")
+
+
 def init_tickets_table() -> None:
     ensure_data_dir()
     # WAL 只需设一次，放初始化里——每次连接都设会在并发下冲突
@@ -80,6 +99,10 @@ def init_tickets_table() -> None:
                 refund_id   TEXT,
                 execution_id TEXT,
                 last_error  TEXT,
+                risk_tier   TEXT NOT NULL DEFAULT 'low',
+                risk_reasons TEXT NOT NULL DEFAULT '[]',
+                required_role TEXT NOT NULL DEFAULT 'customer',
+                rule_version TEXT NOT NULL DEFAULT '',
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
             )
@@ -120,6 +143,7 @@ def init_tickets_table() -> None:
             WHERE status = 'executed'
             """
         )
+        _ensure_columns(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ticket_thread ON refund_tickets(thread_id)"
         )
@@ -201,6 +225,10 @@ def create_ticket(
     requester_id: str | None = None,
     payload_hash: str = "",
     amount_cents: int = 0,
+    risk_tier: str = "low",
+    risk_reasons: str = "[]",
+    required_role: str = "customer",
+    rule_version: str = "",
 ) -> dict:
     """Create one active ticket for an exact action payload.
 
@@ -240,8 +268,9 @@ def create_ticket(
                 INSERT INTO refund_tickets
                     (id, thread_id, tenant_id, requester_id, order_id,
                      amount_cents, reason, payload_hash, status, decision,
-                     operator, refund_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)
+                     operator, refund_id, risk_tier, risk_reasons,
+                     required_role, rule_version, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_id,
@@ -254,6 +283,10 @@ def create_ticket(
                     payload_hash,
                     PENDING,
                     operator,
+                    risk_tier,
+                    risk_reasons,
+                    required_role,
+                    rule_version,
                     now,
                     now,
                 ),
@@ -454,6 +487,30 @@ def find_executed(
             params,
         ).fetchone()
     return _row_to_dict(row) if row else None
+
+
+def count_recent_executed(
+    *,
+    tenant_id: str,
+    requester_id: str,
+    hours: int = 24,
+) -> int:
+    """该用户近 N 小时内执行成功的退款笔数。
+
+    用于风险规则 R3（异常频次）。按 updated_at 算——那是工单进入 executed
+    的时间，比 created_at 更贴近"实际退款发生的时间"。
+    """
+    since = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+    with _lock, db.session(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM refund_tickets
+            WHERE tenant_id = ? AND requester_id = ?
+              AND status = ? AND updated_at >= ?
+            """,
+            (tenant_id, requester_id, EXECUTED, since),
+        ).fetchone()
+    return int(row["n"]) if row else 0
 
 
 def list_tickets(

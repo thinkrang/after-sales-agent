@@ -86,6 +86,12 @@ def _seed_demo_orders(conn: sqlite3.Connection) -> None:
         ("A200", "acme", "acme-manager", "运动长裤", 8900, "delivered", 2),
         ("A300", "acme", "acme-user", "纯棉短袖T恤", 5900, "delivered", 1),
         ("G100", "globex", "globex-user", "企业定制卫衣", 10900, "delivered", 1),
+        # 风险分级演示数据：
+        # A400 归 acme-user，金额 1280 元 → 触发 R1 大额，需 acme-manager 审批
+        # A500 归 acme-manager，签收 6 天（距退款截止不足 24 小时）→ 触发 R2 边界政策，
+        #      发起人自己批准会被四眼原则拒绝
+        ("A400", "acme", "acme-user", "人体工学按摩椅", 128000, "delivered", 1),
+        ("A500", "acme", "acme-manager", "换季清仓套装", 29900, "delivered", 6),
         ("A900", "acme", "acme-manager", "已取消的订单", 9900, "cancelled", None),
     ]
     for (

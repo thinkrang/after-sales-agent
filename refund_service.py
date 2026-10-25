@@ -10,15 +10,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import json
 from dataclasses import dataclass
 
 import orders
+import risk
 import tickets
 from auth import User
 
 
 class ApprovalRequired(PermissionError):
     pass
+
+
+class ApprovalForbidden(PermissionError):
+    """当前操作者无权批准这笔退款（风险等级或四眼原则）。"""
 
 
 class WorkflowConflict(RuntimeError):
@@ -93,6 +99,14 @@ def prepare_ticket(
     if not decision["eligible"]:
         raise orders.RefundDenied(decision["reason"])
 
+    # 风险分级在服务端算，不由模型判断——风控结论必须可复现、可审计。
+    recent = tickets.count_recent_executed(
+        tenant_id=user.tenant_id,
+        requester_id=user.username,
+        hours=risk.RECENT_WINDOW_HOURS,
+    )
+    assessment = risk.assess(order, decision, reason=reason, recent_executed=recent)
+
     ticket = tickets.create_ticket(
         thread_id=thread_id,
         order_id=order["order_id"],
@@ -102,6 +116,10 @@ def prepare_ticket(
         requester_id=user.username,
         payload_hash=payload_hash,
         amount_cents=int(order["amount_cents"]),
+        risk_tier=assessment.tier,
+        risk_reasons=json.dumps(list(assessment.reasons), ensure_ascii=False),
+        required_role=assessment.required_role,
+        rule_version=assessment.rule_version,
     )
     return ticket, order
 
@@ -158,38 +176,80 @@ def find_action_ticket(
     return (ticket, order) if ticket else None
 
 
+def _risk_reasons(ticket: dict) -> list[str]:
+    try:
+        value = json.loads(ticket.get("risk_reasons") or "[]")
+    except (TypeError, ValueError):
+        return []
+    return [str(x) for x in value] if isinstance(value, list) else []
+
+
 def decide(
     user: User,
     *,
     approval_id: str,
-    thread_id: str,
     decision: str,
+    thread_id: str | None = None,
+    message: str | None = None,
 ) -> ApprovalDecision:
+    """提交审批结果。
+
+    两条路径，权限模型不同：
+
+    - **本人路径**（``thread_id`` 必填）：客户在自己的会话里点确认。
+      只能处理 ``required_role='customer'`` 的工单。
+    - **主管路径**（``thread_id`` 为空）：``approver`` 角色从审批队列处理。
+      只能处理 ``required_role='approver'`` 的工单，且**不能是发起人本人**。
+
+    主管路径不校验 thread_id —— 主管不在客户那个会话里，用会话归属鉴权
+    会把人挡在门外。这一路径的鉴权边界是「同租户 + 审批角色 + 非本人」。
+    """
     ticket = tickets.get_ticket(
-        approval_id,
-        tenant_id=user.tenant_id,
-        requester_id=user.username,
+        approval_id, tenant_id=user.tenant_id, requester_id=user.username
     )
-    if ticket is None or ticket["thread_id"] != thread_id:
+    is_requester = ticket is not None
+
+    if ticket is None and user.has_role(risk.ROLE_APPROVER):
+        # 主管路径：同租户内可见，不限定 requester
+        ticket = tickets.get_ticket(approval_id, tenant_id=user.tenant_id)
+
+    if ticket is None:
         raise orders.OrderNotFound("审批记录不存在，或不属于当前账号与会话")
+
+    if is_requester and thread_id and ticket["thread_id"] != thread_id:
+        raise orders.OrderNotFound("审批记录不存在，或不属于当前账号与会话")
+
+    needs_manager = (ticket.get("required_role") or risk.ROLE_CUSTOMER) == risk.ROLE_APPROVER
+
+    if needs_manager:
+        if not user.has_role(risk.ROLE_APPROVER):
+            detail = "；".join(_risk_reasons(ticket)) or "风险等级为高"
+            raise ApprovalForbidden(f"该退款需要主管审批（{detail}）")
+        if is_requester:
+            raise ApprovalForbidden(
+                "高风险退款不能由发起人自己批准，需另一位审批人处理（四眼原则）"
+            )
+    elif not is_requester:
+        raise ApprovalForbidden("无权处理他人发起的低风险退款")
+
     if ticket["status"] != tickets.PENDING:
         raise WorkflowConflict("审批记录已经处理，不能重复提交")
 
+    # 作用域必须和"谁有权动这张单"一致：本人路径限定 requester，
+    # 主管路径只限定租户。
+    scope: dict = {"tenant_id": user.tenant_id}
+    if is_requester:
+        scope["requester_id"] = user.username
+
     if decision == "approve":
-        ok = tickets.approve_ticket(
-            approval_id,
-            operator=user.username,
-            tenant_id=user.tenant_id,
-            requester_id=user.username,
-        )
+        ok = tickets.approve_ticket(approval_id, operator=user.username, **scope)
         target_status = tickets.APPROVED
     elif decision == "reject":
         ok = tickets.reject_ticket(
             approval_id,
-            reason="用户拒绝本次退款",
+            reason=(message or "审批人拒绝本次退款"),
             operator=user.username,
-            tenant_id=user.tenant_id,
-            requester_id=user.username,
+            **scope,
         )
         target_status = tickets.REJECTED
     else:
@@ -197,14 +257,32 @@ def decide(
 
     if not ok:
         raise WorkflowConflict("审批状态已变化，请刷新后重试")
-    refreshed = tickets.get_ticket(
-        approval_id,
-        tenant_id=user.tenant_id,
-        requester_id=user.username,
-    )
+
+    refreshed = tickets.get_ticket(approval_id, **scope)
     if refreshed is None:
         raise WorkflowConflict("审批记录在状态迁移后消失")
     return ApprovalDecision(ticket=refreshed, status=target_status)
+
+
+def execute_for_ticket(ticket: dict) -> dict:
+    """按工单执行退款，不依赖发起人的会话上下文。
+
+    主管批准时用这条路径：主管不在客户的会话里，如果直接用主管身份调
+    ``execute()``，payload 哈希里的 requester 会变成主管，对不上原工单。
+    这里把发起人的身份还原出来，复用同一条幂等执行链路。
+    """
+    requester = User(
+        username=ticket["requester_id"],
+        display_name=ticket["requester_id"],
+        tenant_id=ticket["tenant_id"],
+        roles=frozenset({risk.ROLE_CUSTOMER}),
+    )
+    return execute(
+        requester,
+        thread_id=ticket["thread_id"],
+        order_id=ticket["order_id"],
+        reason=ticket.get("reason") or "",
+    )
 
 
 def execute(

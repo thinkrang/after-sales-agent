@@ -269,3 +269,147 @@ def test_concurrent_downstream_retry_creates_one_refund(manager, workflow):
         refund_ids = list(pool.map(run_once, range(16)))
 
     assert len(set(refund_ids)) == 1
+
+
+# ---------------------------------------------------------------- 风险分级与四眼原则
+
+
+@pytest.fixture
+def acme_customer():
+    return User("acme-user", "ACME 客户", "acme", frozenset({"customer"}))
+
+
+@pytest.fixture
+def acme_approver():
+    """同租户的另一个审批人。四眼原则要求它和发起人不是同一个人。"""
+    return User(
+        "acme-approver", "ACME 审批人", "acme", frozenset({"customer", "approver"})
+    )
+
+
+def test_high_risk_ticket_records_risk_fields(acme_customer, workflow):
+    """高风险单必须把分级、原因、规则版本落在工单上——否则事后无法解释为什么转审批。"""
+    ticket, _ = refund_service.prepare_ticket(
+        acme_customer, thread_id="t-high", order_id="A400", reason="质量问题"
+    )
+    assert ticket["risk_tier"] == "high"
+    assert ticket["required_role"] == "approver"
+    assert ticket["rule_version"]
+    import json
+
+    reasons = json.loads(ticket["risk_reasons"])
+    assert reasons and any("自动审批上限" in r for r in reasons)
+
+
+def test_low_risk_ticket_stays_with_customer(manager, workflow):
+    ticket, _ = refund_service.prepare_ticket(
+        manager, thread_id="t-low", order_id="A100", reason="质量问题"
+    )
+    assert ticket["risk_tier"] == "low"
+    assert ticket["required_role"] == "customer"
+
+
+def test_requester_cannot_approve_own_high_risk(acme_customer, workflow):
+    """高风险单，发起人自己点确认 → 拒绝。
+
+    这是四眼原则的核心：风险高到需要审批时，"本人确认"就没有风控意义了。
+    """
+    ticket, _ = refund_service.prepare_ticket(
+        acme_customer, thread_id="t-self", order_id="A400", reason="质量问题"
+    )
+    with pytest.raises(refund_service.ApprovalForbidden):
+        refund_service.decide(
+            acme_customer,
+            approval_id=ticket["id"],
+            thread_id="t-self",
+            decision="approve",
+        )
+
+
+def test_manager_cannot_approve_own_high_risk(manager, workflow):
+    """主管自己发起的高风险单，自己也不能批。
+
+    A500 签收 6 天，距退款截止不足 24 小时 → 边界政策 → high。
+    """
+    ticket, _ = refund_service.prepare_ticket(
+        manager, thread_id="t-mgr", order_id="A500", reason="质量问题"
+    )
+    assert ticket["required_role"] == "approver"
+    with pytest.raises(refund_service.ApprovalForbidden):
+        refund_service.decide(
+            manager, approval_id=ticket["id"], decision="approve"
+        )
+
+
+def test_another_approver_can_approve_and_execute(
+    acme_customer, acme_approver, workflow
+):
+    """另一个审批人可以批，批完直接执行成功。"""
+    ticket, _ = refund_service.prepare_ticket(
+        acme_customer, thread_id="t-ok", order_id="A400", reason="质量问题"
+    )
+    outcome = refund_service.decide(
+        acme_approver, approval_id=ticket["id"], decision="approve"
+    )
+    assert outcome.status == tickets.APPROVED
+
+    executed = refund_service.execute_for_ticket(outcome.ticket)
+    assert executed["status"] == tickets.EXECUTED
+    assert executed["refund_id"]
+
+
+def test_non_approver_cannot_approve_high_risk(acme_customer, workflow):
+    """没有 approver 角色的人（哪怕是同租户客户）不能批高风险单。
+
+    这里返回的是 404 而不是 403：既不是发起人、也没有审批角色的人
+    不该知道这张工单存在。和"访问他人会话返回 404"是同一个原则。
+    """
+    other = User("acme-user2", "另一个客户", "acme", frozenset({"customer"}))
+    ticket, _ = refund_service.prepare_ticket(
+        acme_customer, thread_id="t-role", order_id="A400", reason="质量问题"
+    )
+    with pytest.raises(orders.OrderNotFound):
+        refund_service.decide(other, approval_id=ticket["id"], decision="approve")
+
+
+def test_approver_cannot_touch_others_low_risk(manager, acme_approver, workflow):
+    """低风险单只能本人处理。审批人越权处理别人的低风险单也要拒绝——
+
+    否则"有 approver 角色"就变成可以替任何人退款。
+    """
+    ticket, _ = refund_service.prepare_ticket(
+        manager, thread_id="t-low2", order_id="A100", reason="质量问题"
+    )
+    with pytest.raises(refund_service.ApprovalForbidden):
+        refund_service.decide(
+            acme_approver, approval_id=ticket["id"], decision="approve"
+        )
+
+
+def test_manager_reject_high_risk(acme_customer, acme_approver, workflow):
+    ticket, _ = refund_service.prepare_ticket(
+        acme_customer, thread_id="t-rej", order_id="A400", reason="质量问题"
+    )
+    outcome = refund_service.decide(
+        acme_approver,
+        approval_id=ticket["id"],
+        decision="reject",
+        message="金额过大，需线下核实",
+    )
+    assert outcome.status == tickets.REJECTED
+
+
+def test_high_risk_approval_is_idempotent_on_retry(
+    acme_customer, acme_approver, workflow
+):
+    """主管重复提交审批 → 409 而不是重复执行。"""
+    ticket, _ = refund_service.prepare_ticket(
+        acme_customer, thread_id="t-idem", order_id="A400", reason="质量问题"
+    )
+    refund_service.decide(
+        acme_approver, approval_id=ticket["id"], decision="approve"
+    )
+    with pytest.raises(refund_service.WorkflowConflict):
+        refund_service.decide(
+            acme_approver, approval_id=ticket["id"], decision="approve"
+        )

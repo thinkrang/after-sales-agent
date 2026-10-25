@@ -11,6 +11,7 @@ action. It treats the model and retrieved documents as untrusted inputs.
 | LLM tool arguments | untrusted | order ownership, policy and approval checks |
 | Retrieved documents | untrusted | tenant-filtered retrieval and evidence gate |
 | Approval record | server-owned | actor, tenant, thread, order, amount and payload hash binding |
+| Risk tier | server-owned | deterministic rules in `risk.py`; the model cannot influence the tier |
 | Refund gateway | external | idempotency key and database uniqueness |
 
 ## Implemented controls
@@ -21,6 +22,11 @@ action. It treats the model and retrieved documents as untrusted inputs.
   authenticated owner; unauthorized session ids return `404`.
 - A refund cannot execute without an `approved` ticket matching the exact
   tenant, requester, thread, order, amount and normalized reason.
+- Risk tier is computed server-side by pure functions (amount / window edge /
+  recent frequency). High-risk tickets require an `approver` role and reject
+  self-approval, so the requester cannot clear their own risky refund.
+- The risk rule version is stored on the ticket, so an auditor can tell which
+  rule set approved a given refund.
 - Approved -> executing is an atomic state transition checked by `rowcount`.
 - The downstream refund uses the ticket id as an idempotency key. A unique
   database constraint prevents two successful refunds for one execution key.
@@ -54,5 +60,6 @@ The security test suite should always cover:
 2. changing `tenant` in a chat request;
 3. approving an order that belongs to another user;
 4. reusing an approval for a different order, amount, thread or reason;
+4b. self-approving a high-risk refund, or a non-approver clearing one;
 5. double-clicking approval and concurrent execution;
 6. crashing after downstream success but before marking the ticket executed.

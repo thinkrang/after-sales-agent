@@ -227,6 +227,66 @@ def main() -> int:
             record("S9c 重复对账不再处理", not again_rows,
                    "已终态，不会被再次捞出")
 
+        # ---------------- S10 高风险单：客户自己批被拒 ----------------
+        print("\nS10 高风险单（A400 1280 元）：客户自己批")
+        from auth import User as _User
+
+        customer = _User("acme-user", "ACME 客户", "acme", frozenset({"customer"}))
+        high_tid = "high_" + str(int(time.time()))
+        high, _ = refund_service.prepare_ticket(
+            customer, thread_id=high_tid, order_id="A400", reason="质量问题",
+        )
+        record("S10a 判定为高风险", high["risk_tier"] == "high",
+               f"tier={high['risk_tier']} role={high['required_role']} "
+               f"rules={high['rule_version']}")
+
+        # 客户自己批 → 必须被风险分级挡住。
+        # 这里直接调服务层而不是打 /chat/resume：那张工单是脚本直接建的，
+        # 没有对应的会话和图中断，走 HTTP 会先被会话校验挡成 404，
+        # 测不到风险分级本身。HTTP 层的 403 由 S12b 覆盖。
+        try:
+            refund_service.decide(
+                customer, approval_id=high["id"],
+                thread_id=high_tid, decision="approve",
+            )
+            record("S10b 客户自批被拒", False, "居然通过了，风险分级没生效")
+        except refund_service.ApprovalForbidden as exc:
+            record("S10b 客户自批被拒（服务层）", True, str(exc)[:60])
+
+        # ---------------- S11 主管审批并执行 ----------------
+        print("\nS11 主管审批高风险单")
+        mgr = login(client, "acme-manager")
+        ok = client.post(f"/tickets/{high['id']}/decision", headers=mgr,
+                         json={"decision": "approve"})
+        body = ok.json() if ok.status_code == 200 else {}
+        record("S11a 主管批准成功", ok.status_code == 200, f"HTTP {ok.status_code}")
+        record("S11b 批准后直接执行", body.get("status") == "executed",
+               f"status={body.get('status')} refund_id={(body.get('ticket') or {}).get('refund_id')}")
+
+        # 主管再点一次 → 409，不能重复执行
+        again2 = client.post(f"/tickets/{high['id']}/decision", headers=mgr,
+                             json={"decision": "approve"})
+        record("S11c 重复审批被拒", again2.status_code == 409,
+               f"HTTP {again2.status_code}")
+
+        # ---------------- S12 四眼原则 ----------------
+        print("\nS12 四眼原则：主管不能批自己发起的单")
+        self_tid = "self_" + str(int(time.time()))
+        # A500 归 acme-manager，签收 6 天 → 边界政策 → high
+        mgr_user = _User(
+            "acme-manager", "ACME 售后主管", "acme",
+            frozenset({"customer", "approver", "knowledge_admin"}),
+        )
+        own, _ = refund_service.prepare_ticket(
+            mgr_user, thread_id=self_tid, order_id="A500", reason="质量问题",
+        )
+        record("S12a 边界政策判为高风险", own["risk_tier"] == "high",
+               f"tier={own['risk_tier']}")
+        self_deny = client.post(f"/tickets/{own['id']}/decision", headers=mgr,
+                                json={"decision": "approve"})
+        record("S12b 自己批自己被拒", self_deny.status_code == 403,
+               f"HTTP {self_deny.status_code}")
+
     # ---------------- 汇总 ----------------
     print("\n" + "=" * 72)
     passed = sum(1 for _, s, _ in results if s == "PASS")
