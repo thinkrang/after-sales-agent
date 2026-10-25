@@ -39,3 +39,4 @@ Thumbs.db
 *.log
 *.tmp
 _acceptance_data/
+_action_model_data/
