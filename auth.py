@@ -147,6 +147,9 @@ def _seed_demo_users(conn: sqlite3.Connection) -> None:
             "customer,approver,knowledge_admin",
         ),
         ("acme-user", "ACME 客户", "acme", "customer"),
+        # 独立的审批人：四眼原则要求高风险单不能由发起人自己批，
+        # 所以演示里需要一个和 acme-manager 不同的审批账号。
+        ("acme-approver", "ACME 审批专员", "acme", "approver"),
         ("globex-user", "GLOBEX 客户", "globex", "customer"),
         ("platform-admin", "平台管理员", "public", "admin"),
     ]

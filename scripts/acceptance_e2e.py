@@ -287,6 +287,84 @@ def main() -> int:
         record("S12b 自己批自己被拒", self_deny.status_code == 403,
                f"HTTP {self_deny.status_code}")
 
+        # ---------------- S13 待审批时的会话行为 ----------------
+        print("\nS13 会话里有未处理审批时再发消息")
+        # 图停在 interrupt 时历史里有一个悬空的 tool_calls。如果直接把新消息
+        # 交给 agent，模型 API 会 400（tool_calls 后面缺 tool 消息）。
+        # 正确行为是拦住并提示，而不是报错。
+        low_sid = None
+        try:
+            # 用 acme-user 的 A300：低风险、且前面的步骤没退过它。
+            # 之前用 A100 会失败——它已经在 S6 退掉了，第二轮根本不会中断。
+            cust_s13 = login(client, "acme-user")
+            low_sid = client.post("/sessions", json={"title": "待审批拦截"},
+                                  headers=cust_s13).json()["id"]
+            client.post("/chat/stream", headers=cust_s13,
+                        json={"thread_id": low_sid,
+                              "message": "我要退款，订单号 A300，质量问题"})
+            r2 = client.post("/chat/stream", headers=cust_s13,
+                             json={"thread_id": low_sid, "message": "可以，请提交"})
+            has_interrupt = any(k == "interrupt" for k, _ in parse_sse(r2.text))
+            r3 = client.post("/chat/stream", headers=cust_s13,
+                             json={"thread_id": low_sid, "message": "先不退了，你们几点上班？"})
+            ev3 = parse_sse(r3.text)
+            kinds = {k for k, _ in ev3}
+            ok = "error" not in kinds and "interrupt" in kinds
+            hint = "".join(d.get("text", "") for k, d in ev3 if k == "token")
+            record("S13a 待审批时不报错", has_interrupt and ok,
+                   f"事件={sorted(kinds)} 提示={hint[:40]}")
+        finally:
+            if low_sid:
+                try:
+                    client.delete(f"/sessions/{low_sid}", headers=cust_s13)
+                except Exception:  # noqa: BLE001
+                    pass
+
+        # ---------------- S14 主管决策后客户会话可继续 ----------------
+        print("\nS14 主管决策后，客户会话能继续对话")
+        approver_tok = login(client, "acme-approver")
+        me2 = client.get("/auth/me", headers=approver_tok).json()
+        record("S14a 独立审批人账号可用", "approver" in me2.get("roles", []),
+               f"roles={me2.get('roles')}")
+
+        loop_sid = client.post("/sessions", json={"title": "闭环"},
+                               headers=login(client, "acme-user")).json()["id"]
+        cust2 = login(client, "acme-user")
+        client.post("/chat/stream", headers=cust2,
+                    json={"thread_id": loop_sid,
+                          "message": "我要退款，订单号 A600，质量问题"})
+        r2b = client.post("/chat/stream", headers=cust2,
+                          json={"thread_id": loop_sid, "message": "可以，请提交"})
+        itr2 = next((d for k, d in parse_sse(r2b.text) if k == "interrupt"), None)
+        loop_tid = (itr2.get("actions") or [{}])[0].get("approval_id") if itr2 else None
+        record("S14b 客户触发高风险单", bool(loop_tid), f"approval_id={loop_tid}")
+
+        if loop_tid:
+            d2 = client.post(f"/tickets/{loop_tid}/decision", headers=approver_tok,
+                             json={"decision": "approve"})
+            body2 = d2.json() if d2.status_code == 200 else {}
+            record("S14c 审批人批准并同步会话",
+                   d2.status_code == 200 and body2.get("session_synced") is True,
+                   f"status={body2.get('status')} session_synced={body2.get('session_synced')}")
+
+            r5 = client.post("/chat/stream", headers=cust2,
+                             json={"thread_id": loop_sid, "message": "退款到账了吗？"})
+            ev5 = parse_sse(r5.text)
+            kinds5 = {k for k, _ in ev5}
+            ans5 = "".join(d.get("text", "") for k, d in ev5 if k == "token")
+            record("S14d 客户可继续对话", "error" not in kinds5 and bool(ans5),
+                   f"事件={sorted(kinds5)} 回答={ans5[:40]}")
+
+            msgs = client.get(f"/sessions/{loop_sid}/messages", headers=cust2)
+            body5 = json.dumps(msgs.json(), ensure_ascii=False)
+            record("S14e 会话里能看到退款结果", "RF" in body5,
+                   "会话历史含退款单号" if "RF" in body5 else "没找到退款单号")
+
+            try:
+                client.delete(f"/sessions/{loop_sid}", headers=cust2)
+            except Exception:  # noqa: BLE001
+                pass
+
     # ---------------- 汇总 ----------------
     print("\n" + "=" * 72)
     passed = sum(1 for _, s, _ in results if s == "PASS")

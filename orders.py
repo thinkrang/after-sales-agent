@@ -91,6 +91,9 @@ def _seed_demo_orders(conn: sqlite3.Connection) -> None:
         # A500 归 acme-manager，签收 6 天（距退款截止不足 24 小时）→ 触发 R2 边界政策，
         #      发起人自己批准会被四眼原则拒绝
         ("A400", "acme", "acme-user", "人体工学按摩椅", 128000, "delivered", 1),
+        # A600 同样是 acme-user 的高价值订单，专供"完整会话闭环"验收用：
+        # A400 会被审批流程退掉，闭环测试需要一笔没被碰过的单子。
+        ("A600", "acme", "acme-user", "智能手表", 168000, "delivered", 1),
         ("A500", "acme", "acme-manager", "换季清仓套装", 29900, "delivered", 6),
         ("A900", "acme", "acme-manager", "已取消的订单", 9900, "cancelled", None),
     ]

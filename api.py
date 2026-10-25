@@ -811,6 +811,7 @@ def decide_ticket(ticket_id: str, request: TicketDecisionRequest, user: CurrentU
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     ticket = outcome.ticket
+    session_synced = True
 
     if outcome.status == "approved":
         try:
@@ -822,8 +823,20 @@ def decide_ticket(ticket_id: str, request: TicketDecisionRequest, user: CurrentU
                 detail=f"已批准但执行失败，可运行 reconcile_refunds.py 恢复：{exc}",
             ) from exc
 
+    # 把发起人的会话从悬空中断里恢复出来。失败不影响退款本身——
+    # 钱已经退完了，只是客户会话里少一句收尾说明，不能因此报错给审批人。
+    try:
+        _resume_requester_thread(ticket, request.decision, request.message)
+    except Exception:  # noqa: BLE001
+        session_synced = False
+        logging.exception("恢复发起人会话失败 ticket=%s", ticket_id)
+
     logging.info("主管 %s 处理工单 %s -> %s", user.username, ticket_id, ticket["status"])
-    return {"ticket": ticket, "status": ticket["status"]}
+    return {
+        "ticket": ticket,
+        "status": ticket["status"],
+        "session_synced": session_synced,
+    }
 
 
 @app.get("/orders")
@@ -1212,6 +1225,36 @@ def _prepare_approval_actions(actions: list[dict], config: dict) -> list[dict]:
     return actions
 
 
+def _resume_requester_thread(ticket: dict, decision: str, message: str | None = None) -> None:
+    """主管决策后，把发起人的会话从 interrupt 里恢复出来。
+
+    为什么必须做
+    ------------
+    图停在 interrupt 时，assistant 已经发出过 ``create_refund_request`` 的
+    tool_calls，但工具没执行，历史里缺对应的 ToolMessage。如果就这样放着，
+    客户下次说话时这段历史会被整段送给模型，API 直接拒绝：
+
+        An assistant message with 'tool_calls' must be followed by tool messages
+
+    用户看到的是"流式回答失败"。所以主管一决策，就用发起人的身份 resume 一次，
+    让中间件补上工具结果，图正常收尾。批准时工具会再跑一遍，但下游以工单 ID
+    为幂等键，只会返回原退款单号。
+    """
+    config = {
+        "configurable": {
+            "thread_id": ticket["thread_id"],
+            "tenant": ticket["tenant_id"],
+            "user_id": ticket["requester_id"],
+            "display_name": ticket["requester_id"],
+            "roles": ["customer"],
+        }
+    }
+    payload = {"type": decision}
+    if message:
+        payload["message"] = message
+    app.state.agent.invoke(Command(resume={"decisions": [payload]}), config=config)
+
+
 def _stream_agent(payload, config: dict, title_source: str | None = None):
     """统一流式生成器。
 
@@ -1223,6 +1266,42 @@ def _stream_agent(payload, config: dict, title_source: str | None = None):
     first_token_at: float | None = None
 
     yield _sse("status", {"text": "正在分析问题..."})
+
+    # 会话里还有没处理完的审批时，绝不能把新消息交给 agent。
+    #
+    # 原因：图停在 interrupt 时，assistant 已经发出过 tool_calls，但工具没执行，
+    # 历史里就缺了对应的 ToolMessage。这时候再调模型，OpenAI 会直接 400：
+    #   "An assistant message with 'tool_calls' must be followed by tool messages"
+    # 用户看到的是"流式回答失败"，而真正的原因是会话状态没闭合。
+    #
+    # 正确做法是把待审批状态重新推给前端，让用户先把这张单处理掉。
+    if not isinstance(payload, Command):
+        pending = _pending_actions(config)
+        if pending:
+            actions = _prepare_approval_actions(pending, config)
+            title = touch_session(
+                thread_id, title_source, user=_user_from_config(config)
+            )
+            needs_manager = any(
+                (a.get("risk") or {}).get("required_role") == "approver"
+                for a in actions
+            )
+            hint = (
+                "这笔退款需要主管审批，已经提交给审批人，请等待处理结果。"
+                if needs_manager
+                else "上一笔退款还在等你确认，请先在审批卡片上确认或拒绝。"
+            )
+            yield _sse("token", {"text": hint})
+            # 和正常中断路径保持一致：只发 interrupt，不发 done。
+            # done 的语义是"正常完成、没有待审批"，前端靠这个区别决定
+            # 要不要收起审批卡片。多补一个 done 会让卡片消失。
+            yield _sse("interrupt", {
+                "thread_id": thread_id,
+                "title": title,
+                "actions": actions,
+                "tenant": config["configurable"].get("tenant"),
+            })
+            return
 
     try:
         # 同 /chat：不加全局锁。不同 thread_id 的请求互不干扰，

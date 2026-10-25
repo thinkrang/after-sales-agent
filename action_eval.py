@@ -636,22 +636,38 @@ def deterministic_scenarios() -> list[Scenario]:
 
 
 def run(scenarios: list[Scenario], *, verbose: bool = True) -> Report:
+    """跑一组场景。
+
+    跑完必须把模块级 DB 路径还原：这个函数会被 pytest 调用，如果不还原，
+    同进程里后面的测试就会连到一个已经被删掉的临时目录上。
+    """
+    saved = {
+        "tickets": tickets.DB_PATH,
+        "orders": orders.ORDERS_DB,
+        "auth": auth.USER_DB,
+    }
     report = Report()
-    for s in scenarios:
-        tmp = Path(tempfile.mkdtemp(prefix="act_"))
-        try:
-            _reset(tmp)
+    try:
+        for s in scenarios:
+            tmp = Path(tempfile.mkdtemp(prefix="act_"))
             try:
-                outcome = s.fn()
-            except Exception as exc:  # noqa: BLE001
-                outcome = Outcome(False, f"场景本身抛异常：{type(exc).__name__}: {exc}")
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-            db.release_all()
-        report.add(s, outcome)
-        if verbose:
-            mark = "✓" if outcome.ok else ("☠" if outcome.danger else "✗")
-            print(f"  {mark} [{s.id}] {s.description:<32} {outcome.detail}")
+                _reset(tmp)
+                try:
+                    outcome = s.fn()
+                except Exception as exc:  # noqa: BLE001
+                    outcome = Outcome(False, f"场景本身抛异常：{type(exc).__name__}: {exc}")
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+                db.release_all()
+            report.add(s, outcome)
+            if verbose:
+                mark = "✓" if outcome.ok else ("☠" if outcome.danger else "✗")
+                print(f"  {mark} [{s.id}] {s.description:<32} {outcome.detail}")
+    finally:
+        tickets.DB_PATH = saved["tickets"]
+        orders.ORDERS_DB = saved["orders"]
+        auth.USER_DB = saved["auth"]
+        db.release_all()
     return report
 
 

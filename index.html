@@ -290,6 +290,42 @@ details.tool-res pre{
   display:flex;align-items:center;gap:6px;font-size:12.5px;
   color:var(--dim);font-weight:500;
 }
+/* 审批队列（仅 approver 角色可见） */
+.queue-btn{display:none}
+.queue-btn.show{display:flex}
+.queue-badge{
+  margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--err);color:#fff;font-size:11px;line-height:18px;text-align:center;
+}
+.queue-mask{
+  position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+  padding:24px;background:rgba(28,27,25,.32);
+}
+.queue-mask.show{display:flex}
+.queue-card{
+  width:min(680px,100%);max-height:80vh;overflow:auto;background:var(--bg);
+  border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow-lg);
+}
+.queue-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.queue-head h3{font-size:15px;font-weight:600}
+.queue-sub{font-size:12.5px;color:var(--dim);margin-bottom:16px}
+.queue-row{border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--bg-soft)}
+.queue-row-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.queue-order{font-weight:600;font-size:13.5px}
+.queue-amount{color:var(--text-2);font-size:13px}
+.queue-meta{font-size:12px;color:var(--dim);margin-top:6px}
+.queue-risk{
+  margin-top:8px;padding:8px 10px;border-radius:8px;background:#fdf6ec;
+  color:var(--warn);font-size:12.5px;line-height:1.55;
+}
+.queue-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.queue-acts button{
+  font:inherit;font-size:12.5px;padding:7px 14px;border-radius:8px;cursor:pointer;
+  border:1px solid var(--border-strong);background:var(--bg);color:var(--text);
+}
+.queue-acts .ok{background:var(--accent);border-color:var(--accent);color:#fff}
+.queue-acts button:disabled{opacity:.4;cursor:not-allowed}
+.queue-empty{text-align:center;color:var(--dim);font-size:13px;padding:28px 0}
 .approval-done.ok{color:var(--ok)}
 .approval-done.no{color:var(--warn)}
 
@@ -455,10 +491,24 @@ html[data-theme="dark"] .welcome-mark{
       <button class="foot-link" id="accountBtn" title="退出登录">
         <span>👤</span><span class="account-name" id="accountName">未登录</span>
       </button>
+      <button class="foot-link queue-btn" id="approvalBtn">
+        <span>🔐</span> 审批队列 <span class="queue-badge" id="approvalCount" hidden>0</span>
+      </button>
       <a class="foot-link" href="/knowledge"><span>📚</span> 知识库管理</a>
       <button class="foot-link" id="themeToggle"><span id="themeIcon">🌙</span> <span id="themeText">深色模式</span></button>
     </div>
   </aside>
+
+  <div class="queue-mask" id="queueMask">
+    <div class="queue-card">
+      <div class="queue-head">
+        <h3>审批队列</h3>
+        <button class="icon-btn" id="queueClose" aria-label="关闭">✕</button>
+      </div>
+      <div class="queue-sub">高风险退款需要另一位审批人处理，发起人不能自批。</div>
+      <div id="queueList"></div>
+    </div>
+  </div>
 
   <div class="backdrop" id="backdrop"></div>
 
@@ -493,6 +543,7 @@ html[data-theme="dark"] .welcome-mark{
       <label for="username">账号</label>
       <select id="username">
         <option value="acme-manager">acme-manager · ACME 售后主管</option>
+        <option value="acme-approver">acme-approver · ACME 审批专员</option>
         <option value="acme-user">acme-user · ACME 客户</option>
         <option value="globex-user">globex-user · GLOBEX 客户</option>
         <option value="platform-admin">platform-admin · 平台管理员</option>
@@ -547,6 +598,11 @@ html[data-theme="dark"] .welcome-mark{
     loginError: document.getElementById("loginError"),
     accountBtn: document.getElementById("accountBtn"),
     accountName: document.getElementById("accountName"),
+    approvalBtn: document.getElementById("approvalBtn"),
+    approvalCount: document.getElementById("approvalCount"),
+    queueMask: document.getElementById("queueMask"),
+    queueList: document.getElementById("queueList"),
+    queueClose: document.getElementById("queueClose"),
   };
 
   const state = {
@@ -584,13 +640,31 @@ html[data-theme="dark"] .welcome-mark{
     return headers;
   }
 
+  function currentUser() {
+    try {
+      return JSON.parse(localStorage.getItem(USER_KEY) || "null");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function isApprover() {
+    const user = currentUser();
+    return !!(user && Array.isArray(user.roles) && user.roles.includes("approver"));
+  }
+
   function setCurrentUser(user) {
     if (user) {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       el.accountName.textContent = user.display_name + " · " + user.tenant_id;
+      // 审批队列只对有 approver 角色的人显示——按钮不出现比点进去被 403 更好
+      const canApprove = Array.isArray(user.roles) && user.roles.includes("approver");
+      el.approvalBtn.classList.toggle("show", canApprove);
+      if (canApprove) refreshApprovalCount();
     } else {
       localStorage.removeItem(USER_KEY);
       el.accountName.textContent = "未登录";
+      el.approvalBtn.classList.remove("show");
     }
   }
 
@@ -1068,13 +1142,158 @@ html[data-theme="dark"] .welcome-mark{
   });
 
   /* ============ 审批卡片 ============ */
+  /* ============ 审批队列（approver 角色） ============ */
+
+  function riskLine(ticket) {
+    let reasons = [];
+    try {
+      reasons = JSON.parse(ticket.risk_reasons || "[]");
+    } catch (_) {
+      reasons = [];
+    }
+    return reasons;
+  }
+
+  async function refreshApprovalCount() {
+    if (!isApprover()) return;
+    try {
+      const data = await api("/tickets?pending_only=true&limit=100");
+      const pending = (data.tickets || []).filter((t) => t.required_role === "approver");
+      el.approvalCount.textContent = String(pending.length);
+      el.approvalCount.hidden = pending.length === 0;
+    } catch (_) {
+      /* 计数失败不打扰用户，打开面板时会重新拉 */
+    }
+  }
+
+  function queueRow(ticket) {
+    const row = document.createElement("div");
+    row.className = "queue-row";
+
+    const top = document.createElement("div");
+    top.className = "queue-row-top";
+    const order = document.createElement("span");
+    order.className = "queue-order";
+    order.textContent = "订单 " + ticket.order_id;
+    const amount = document.createElement("span");
+    amount.className = "queue-amount";
+    amount.textContent = (ticket.amount_cents / 100).toFixed(2) + " 元";
+    top.appendChild(order);
+    top.appendChild(amount);
+    row.appendChild(top);
+
+    const meta = document.createElement("div");
+    meta.className = "queue-meta";
+    meta.textContent =
+      "发起人 " + ticket.requester_id +
+      " · 原因 " + (ticket.reason || "未填写") +
+      " · 规则 " + (ticket.rule_version || "-");
+    row.appendChild(meta);
+
+    const reasons = riskLine(ticket);
+    if (reasons.length) {
+      const risk = document.createElement("div");
+      risk.className = "queue-risk";
+      risk.textContent = "⚠ " + reasons.join("；");
+      row.appendChild(risk);
+    }
+
+    const acts = document.createElement("div");
+    acts.className = "queue-acts";
+    const reject = document.createElement("button");
+    reject.textContent = "拒绝";
+    const approve = document.createElement("button");
+    approve.className = "ok";
+    approve.textContent = "批准并退款";
+    acts.appendChild(reject);
+    acts.appendChild(approve);
+    row.appendChild(acts);
+
+    // 发起人自己不能批自己的单——按钮直接禁用，而不是让人点了收 403
+    const self = currentUser() && currentUser().username === ticket.requester_id;
+    if (self) {
+      approve.disabled = true;
+      approve.textContent = "发起人不能自批";
+    }
+
+    reject.addEventListener("click", () => decideTicket(ticket, "reject", row));
+    approve.addEventListener("click", () => decideTicket(ticket, "approve", row));
+    return row;
+  }
+
+  async function decideTicket(ticket, decision, row) {
+    row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      const res = await api("/tickets/" + ticket.id + "/decision", {
+        method: "POST",
+        body: JSON.stringify({ decision: decision }),
+      });
+      const note = document.createElement("div");
+      note.className = "queue-meta";
+      note.textContent = decision === "approve"
+        ? "已批准并执行，退款单号 " + ((res.ticket || {}).refund_id || "-")
+        : "已拒绝";
+      row.appendChild(note);
+      toast(note.textContent);
+      refreshApprovalCount();
+    } catch (err) {
+      toast("处理失败：" + err.message);
+      row.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  }
+
+  async function openQueue() {
+    el.queueMask.classList.add("show");
+    el.queueList.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "queue-empty";
+    loading.textContent = "加载中…";
+    el.queueList.appendChild(loading);
+    try {
+      const data = await api("/tickets?pending_only=true&limit=100");
+      const pending = (data.tickets || []).filter((t) => t.required_role === "approver");
+      el.queueList.innerHTML = "";
+      if (!pending.length) {
+        const empty = document.createElement("div");
+        empty.className = "queue-empty";
+        empty.textContent = "没有待审批的高风险退款";
+        el.queueList.appendChild(empty);
+        return;
+      }
+      pending.forEach((t) => el.queueList.appendChild(queueRow(t)));
+    } catch (err) {
+      el.queueList.innerHTML = "";
+      const bad = document.createElement("div");
+      bad.className = "queue-empty";
+      bad.textContent = "加载失败：" + err.message;
+      el.queueList.appendChild(bad);
+    }
+  }
+
+  el.approvalBtn.addEventListener("click", () => {
+    el.sidebar.classList.remove("open");
+    openQueue();
+  });
+  el.queueClose.addEventListener("click", () => el.queueMask.classList.remove("show"));
+  el.queueMask.addEventListener("click", (e) => {
+    if (e.target === el.queueMask) el.queueMask.classList.remove("show");
+  });
+
   function approvalCard(actions) {
     const box = document.createElement("div");
     box.className = "approval";
 
+    // 风险分级决定这张卡片的语义：低风险是"你确认一下"，
+    // 高风险是"已经转给主管了，你只能撤回"。两者不能长一样，
+    // 否则客户会以为自己点一下就能退。
+    const risk = (actions[0] || {}).risk || {};
+    const needsManager = risk.required_role === "approver";
+
     const head = document.createElement("div");
     head.className = "approval-head";
-    head.textContent = "🔒 这是写操作，需要你确认后才会执行";
+    head.textContent = needsManager
+      ? "🔐 高风险退款 · 已提交主管审批"
+      : "🔒 这是写操作，需要你确认后才会执行";
     box.appendChild(head);
 
     for (const action of actions) {
@@ -1099,6 +1318,13 @@ html[data-theme="dark"] .welcome-mark{
         blocked.textContent = "无法创建审批：" + action.blocked_reason;
         box.appendChild(blocked);
       }
+      const reasons = (action.risk || {}).reasons || [];
+      if (reasons.length) {
+        const riskBox = document.createElement("div");
+        riskBox.className = "queue-risk";
+        riskBox.textContent = "⚠ " + reasons.join("；");
+        box.appendChild(riskBox);
+      }
     }
 
     const acts = document.createElement("div");
@@ -1119,6 +1345,12 @@ html[data-theme="dark"] .welcome-mark{
     const blocked = actions.some((action) => !action.approval_id);
     approve.disabled = blocked;
     reject.disabled = blocked;
+    if (needsManager) {
+      // 客户点批准只会拿到 403，不如直接说明情况。
+      // 拒绝按钮保留——撤回自己的申请是合理的。
+      approve.disabled = true;
+      approve.textContent = "等待主管审批";
+    }
     return { box, acts, approve, reject, blocked };
   }
 

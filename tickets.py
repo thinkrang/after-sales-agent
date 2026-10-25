@@ -61,6 +61,7 @@ _ADDED_COLUMNS = {
     "risk_reasons": "TEXT NOT NULL DEFAULT '[]'",
     "required_role": "TEXT NOT NULL DEFAULT 'customer'",
     "rule_version": "TEXT NOT NULL DEFAULT ''",
+    "attempts": "INTEGER NOT NULL DEFAULT 0",
 }
 
 
@@ -103,6 +104,7 @@ def init_tickets_table() -> None:
                 risk_reasons TEXT NOT NULL DEFAULT '[]',
                 required_role TEXT NOT NULL DEFAULT 'customer',
                 rule_version TEXT NOT NULL DEFAULT '',
+                attempts    INTEGER NOT NULL DEFAULT 0,
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
             )
@@ -398,6 +400,57 @@ def mark_executed(
             execution_id=execution_id,
             last_error=None,
         )
+
+
+MAX_EXECUTION_ATTEMPTS = 3
+
+
+def record_attempt(ticket_id: str, error: str = "") -> dict:
+    """记录一次执行失败，但**不**终结工单。
+
+    为什么要区分"失败"和"可以重试"
+    ------------------------------
+    ``failed`` 是终态，一旦进入就不会再被对账捞出来。如果下游只是瞬时抖动
+    （锁超时、连接被重置），直接把工单标成 failed，这笔退款就永远补不上了。
+
+    所以这里只累加尝试次数：工单留在 ``executing``，对账脚本会带着同一个
+    幂等键重试。重试到上限后仍然失败，才转 ``failed``——因为下游退款是按
+    幂等键去重的，**如果它真的成功过，重试会返回原记录而不是继续失败**。
+    持续失败就说明确实没退成，这时候终结是安全的。
+
+    返回更新后的工单，便于调用方判断是否已转 failed。
+    """
+    now = _now()
+    with _lock, db.session(DB_PATH) as conn:
+        conn.execute(
+            """
+            UPDATE refund_tickets
+            SET attempts = attempts + 1, last_error = ?, updated_at = ?
+            WHERE id = ? AND status IN (?, ?)
+            """,
+            (error[:500], now, ticket_id, APPROVED, EXECUTING),
+        )
+        row = conn.execute(
+            "SELECT * FROM refund_tickets WHERE id = ?", (ticket_id,)
+        ).fetchone()
+        if row is None:
+            return {}
+        current = _row_to_dict(row)
+        if current["attempts"] >= MAX_EXECUTION_ATTEMPTS:
+            _transition(
+                conn,
+                ticket_id,
+                FAILED,
+                expected=current["status"],
+                last_error=(
+                    f"重试 {current['attempts']} 次仍失败，需人工核实：{error[:200]}"
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM refund_tickets WHERE id = ?", (ticket_id,)
+            ).fetchone()
+            return _row_to_dict(row) if row else {}
+        return current
 
 
 def mark_failed(ticket_id: str, error: str = "") -> bool:

@@ -413,3 +413,193 @@ def test_high_risk_approval_is_idempotent_on_retry(
         refund_service.decide(
             acme_approver, approval_id=ticket["id"], decision="approve"
         )
+
+
+# ---------------------------------------------------------------- failed 语义
+
+
+def _approved_ticket(user, thread, order_id="A100"):
+    ticket, _ = refund_service.prepare_ticket(
+        user, thread_id=thread, order_id=order_id, reason="质量问题"
+    )
+    refund_service.decide(user, approval_id=ticket["id"], thread_id=thread,
+                          decision="approve")
+    return ticket
+
+
+def test_transient_error_keeps_ticket_retryable(manager, workflow, monkeypatch):
+    """瞬时故障不能把工单打成 failed —— 那笔退款就永远补不上了。"""
+    ticket = _approved_ticket(manager, "tr1")
+
+    def boom(**kwargs):
+        raise RuntimeError("数据库锁超时")
+
+    monkeypatch.setattr(orders, "execute_refund", boom)
+    with pytest.raises(RuntimeError):
+        refund_service.execute(manager, thread_id="tr1", order_id="A100",
+                               reason="质量问题")
+
+    current = tickets.get_ticket(ticket["id"])
+    assert current["status"] == tickets.EXECUTING, "应留在 executing 等对账重试"
+    assert current["attempts"] == 1
+    assert "数据库锁超时" in (current["last_error"] or "")
+    # 仍然能被对账捞出来
+    assert any(x["id"] == ticket["id"] for x in tickets.list_recoverable())
+
+
+def test_retry_limit_escalates_to_failed(manager, workflow, monkeypatch):
+    """重试到上限仍未成功，才转 failed。"""
+    ticket = _approved_ticket(manager, "tr2")
+
+    def boom(**kwargs):
+        raise RuntimeError("持续失败")
+
+    monkeypatch.setattr(orders, "execute_refund", boom)
+
+    for _ in range(tickets.MAX_EXECUTION_ATTEMPTS):
+        with pytest.raises(RuntimeError):
+            refund_service.execute(manager, thread_id="tr2", order_id="A100",
+                                   reason="质量问题")
+
+    current = tickets.get_ticket(ticket["id"])
+    assert current["status"] == tickets.FAILED
+    assert current["attempts"] == tickets.MAX_EXECUTION_ATTEMPTS
+    assert "需人工核实" in (current["last_error"] or "")
+    # 终态不再被对账捞出
+    assert not any(x["id"] == ticket["id"] for x in tickets.list_recoverable())
+
+
+def test_business_denial_fails_immediately(manager, workflow, monkeypatch):
+    """业务规则拒绝是确定性失败，重试也不会变，直接终结。"""
+    ticket = _approved_ticket(manager, "tr3")
+
+    def deny(**kwargs):
+        raise orders.RefundDenied("审批金额与订单金额不一致")
+
+    monkeypatch.setattr(orders, "execute_refund", deny)
+    with pytest.raises(orders.RefundDenied):
+        refund_service.execute(manager, thread_id="tr3", order_id="A100",
+                               reason="质量问题")
+
+    current = tickets.get_ticket(ticket["id"])
+    assert current["status"] == tickets.FAILED
+    assert current["attempts"] == 0, "业务拒绝不该算一次重试"
+
+
+def test_reconcile_recovers_after_transient_error(manager, workflow, monkeypatch):
+    """瞬时故障之后，对账能把它补完——而且用同一个退款单号。"""
+    ticket = _approved_ticket(manager, "tr4")
+
+    original = orders.execute_refund
+
+    def boom(**kwargs):
+        raise RuntimeError("临时不可用")
+
+    monkeypatch.setattr(orders, "execute_refund", boom)
+    with pytest.raises(RuntimeError):
+        refund_service.execute(manager, thread_id="tr4", order_id="A100",
+                               reason="质量问题")
+
+    # 只还原这一个补丁。用 monkeypatch.undo() 会把 fixture 里的
+    # DB_PATH 补丁一起撤掉，导致后面查的是真实数据库。
+    monkeypatch.setattr(orders, "execute_refund", original)
+    rows = [x for x in tickets.list_recoverable() if x["id"] == ticket["id"]]
+    assert rows, "故障后应仍可被对账捞出"
+    result = refund_service.reconcile_ticket(rows[0])
+    assert result["status"] == tickets.EXECUTED
+    assert result["refund_id"]
+
+
+# ---------------------------------------------------------------- failed 语义
+
+
+def _approved_ticket(user, thread, order_id="A100"):
+    ticket, _ = refund_service.prepare_ticket(
+        user, thread_id=thread, order_id=order_id, reason="质量问题"
+    )
+    refund_service.decide(user, approval_id=ticket["id"], thread_id=thread,
+                          decision="approve")
+    return ticket
+
+
+def test_transient_error_keeps_ticket_retryable(manager, workflow, monkeypatch):
+    """瞬时故障不能把工单打成 failed —— 那笔退款就永远补不上了。"""
+    ticket = _approved_ticket(manager, "tr1")
+
+    def boom(**kwargs):
+        raise RuntimeError("数据库锁超时")
+
+    monkeypatch.setattr(orders, "execute_refund", boom)
+    with pytest.raises(RuntimeError):
+        refund_service.execute(manager, thread_id="tr1", order_id="A100",
+                               reason="质量问题")
+
+    current = tickets.get_ticket(ticket["id"])
+    assert current["status"] == tickets.EXECUTING, "应留在 executing 等对账重试"
+    assert current["attempts"] == 1
+    assert "数据库锁超时" in (current["last_error"] or "")
+    # 仍然能被对账捞出来
+    assert any(x["id"] == ticket["id"] for x in tickets.list_recoverable())
+
+
+def test_retry_limit_escalates_to_failed(manager, workflow, monkeypatch):
+    """重试到上限仍未成功，才转 failed。"""
+    ticket = _approved_ticket(manager, "tr2")
+
+    def boom(**kwargs):
+        raise RuntimeError("持续失败")
+
+    monkeypatch.setattr(orders, "execute_refund", boom)
+
+    for _ in range(tickets.MAX_EXECUTION_ATTEMPTS):
+        with pytest.raises(RuntimeError):
+            refund_service.execute(manager, thread_id="tr2", order_id="A100",
+                                   reason="质量问题")
+
+    current = tickets.get_ticket(ticket["id"])
+    assert current["status"] == tickets.FAILED
+    assert current["attempts"] == tickets.MAX_EXECUTION_ATTEMPTS
+    assert "需人工核实" in (current["last_error"] or "")
+    # 终态不再被对账捞出
+    assert not any(x["id"] == ticket["id"] for x in tickets.list_recoverable())
+
+
+def test_business_denial_fails_immediately(manager, workflow, monkeypatch):
+    """业务规则拒绝是确定性失败，重试也不会变，直接终结。"""
+    ticket = _approved_ticket(manager, "tr3")
+
+    def deny(**kwargs):
+        raise orders.RefundDenied("审批金额与订单金额不一致")
+
+    monkeypatch.setattr(orders, "execute_refund", deny)
+    with pytest.raises(orders.RefundDenied):
+        refund_service.execute(manager, thread_id="tr3", order_id="A100",
+                               reason="质量问题")
+
+    current = tickets.get_ticket(ticket["id"])
+    assert current["status"] == tickets.FAILED
+    assert current["attempts"] == 0, "业务拒绝不该算一次重试"
+
+
+def test_reconcile_recovers_after_transient_error(manager, workflow, monkeypatch):
+    """瞬时故障之后，对账能把它补完——而且用同一个退款单号。"""
+    ticket = _approved_ticket(manager, "tr4")
+
+    original = orders.execute_refund
+
+    def boom(**kwargs):
+        raise RuntimeError("临时不可用")
+
+    monkeypatch.setattr(orders, "execute_refund", boom)
+    with pytest.raises(RuntimeError):
+        refund_service.execute(manager, thread_id="tr4", order_id="A100",
+                               reason="质量问题")
+
+    # 只还原这一个补丁。用 monkeypatch.undo() 会把 fixture 里的
+    # DB_PATH 补丁一起撤掉，导致后面查的是真实数据库。
+    monkeypatch.setattr(orders, "execute_refund", original)
+    rows = [x for x in tickets.list_recoverable() if x["id"] == ticket["id"]]
+    assert rows, "故障后应仍可被对账捞出"
+    result = refund_service.reconcile_ticket(rows[0])
+    assert result["status"] == tickets.EXECUTED
+    assert result["refund_id"]

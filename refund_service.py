@@ -338,8 +338,17 @@ def execute(
             amount_cents=int(ticket["amount_cents"]),
             idempotency_key=ticket["id"],
         )
-    except Exception as exc:
+    except (orders.RefundDenied, orders.OrderNotFound) as exc:
+        # 业务规则拒绝：金额不符、政策不允许、订单不存在。
+        # 这类是确定性失败，重试也不会变，可以安全终结。
         tickets.mark_failed(ticket["id"], str(exc))
+        raise
+    except Exception as exc:
+        # 其它异常（锁超时、连接中断、IO 错误）：可能是瞬时故障，
+        # 也可能下游已受理但响应丢了。**不能直接标 failed**——
+        # failed 是终态，对账不会再捞它，这笔退款就永远补不上了。
+        # 保持 executing，累加尝试次数，交给对账带同一幂等键重试。
+        tickets.record_attempt(ticket["id"], str(exc))
         raise
 
     # Never mark the ticket failed after the downstream call may have
