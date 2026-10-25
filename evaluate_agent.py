@@ -223,7 +223,7 @@ def evaluate(include_holdout: bool = True, multiturn: bool = False) -> dict:
     # 按题型拆
     print("\n按题型拆分：")
     types = (["coreference", "slot_fill", "switch"] if multiturn
-             else ["easy", "paraphrase", "multihop", "negative"])
+             else ["easy", "paraphrase", "multihop", "conflict", "temporal", "negative"])
     for t in types:
         sub = [r for r in results if r["type"] == t]
         if not sub:

@@ -28,11 +28,11 @@ def test_multiturn_cases_exist():
 def test_multiturn_cases_are_excluded_from_single_turn():
     """agent_cases() 默认不含多轮题——否则「任务成功率」这个数字不可比。"""
     single = ds.agent_cases()
-    assert len(single) == 50
+    assert len(single) == 80
     assert all("history" not in c for c in single)
 
     both = ds.agent_cases(include_multiturn=True)
-    assert len(both) == 62
+    assert len(both) == 92
 
 
 def test_multiturn_cases_have_no_expected_sources():
@@ -45,10 +45,12 @@ def test_multiturn_cases_have_no_expected_sources():
         assert c["expected_sources"] == [], f"{c['id']} 会污染检索指标"
 
 
-def test_retrieval_cases_count_unchanged():
-    """加了多轮题之后，检索评测的题目数不能变。"""
-    # 49 = 50 条单轮里排除 N03（负例题，知识库无来源）
-    assert len(ds.retrieval_cases()) == 49
+def test_retrieval_cases_exclude_no_source_cases():
+    """检索评测只收有 expected_sources 的题。
+
+    多轮题（expected_sources 为空）和 N03/N13 这类无来源负例题都不参与。
+    """
+    assert len(ds.retrieval_cases()) == 78
 
 
 def test_every_case_has_judgement_fields():

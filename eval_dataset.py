@@ -9,6 +9,8 @@
    - multihop   需要跨文档或做一步推理 → 考组合能力
    - negative   语义很近但关键信息缺失 → 考抗幻觉（最重要）
    - coreference / slot_fill / switch  多轮三类 → 考上下文（带 history 字段）
+   - conflict   新旧版本并存，答案必须取新版本 → 考版本识别（最容易错）
+   - temporal   带生效时间的规则 → 考时效判断
 3. holdout=True 的题目只用于最终验收，不允许拿来调参、改 prompt。
    一旦你用它调过东西，它就不再是测试题了。
 
@@ -189,10 +191,6 @@ DATASET = [
 
     # ==================== negative：近邻难负例，10 条 ====================
     # 共同特征：语义上贴近某个文档，但那个文档里恰好没有这个具体信息。
-    {"id": "N01", "type": "negative", "question": "退货运费由谁来承担？",
-     "expected_sources": ["refund_policy.txt"], "expect_answerable": False,
-     "must_include": ["无法", "没有", "未提及", "不包含"], "expect_refusal": True, "holdout": False},
-
     {"id": "N02", "type": "negative", "question": "休闲卫衣有XL码吗？",
      "expected_sources": ["product_info.txt"], "expect_answerable": False,
      "must_include": ["无法", "没有", "未提及", "不包含"], "expect_refusal": True, "holdout": True},
@@ -317,6 +315,144 @@ DATASET = [
      "question": "顺便问下，修改地址会影响发货吗？",
      "expected_sources": [], "expect_answerable": True,
      "must_include": ["延迟"], "expect_refusal": False, "holdout": False},
+
+    # ==================== 品类细则：10 条 ====================
+    # 考"通用政策和品类细则哪个优先"。通用退货政策写 7 天，
+    # 但大家电 15 天、生鲜 24 小时、定制不退——只命中通用政策就会答错。
+    {"id": "C01", "type": "easy", "question": "大家电签收后几天内可以无理由退货？",
+     "expected_sources": ["category_appliance.txt"], "expect_answerable": True,
+     "must_include": ["15"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C02", "type": "easy", "question": "生鲜商品签收后多久内要提出售后？",
+     "expected_sources": ["category_fresh.txt"], "expect_answerable": True,
+     "must_include": ["24"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C03", "type": "easy", "question": "内衣拆封后还能无理由退货吗？",
+     "expected_sources": ["category_underwear.txt"], "expect_answerable": True,
+     "must_include": ["不支持", "不予"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C04", "type": "easy", "question": "定制商品可以无理由退货吗？",
+     "expected_sources": ["category_custom.txt"], "expect_answerable": True,
+     "must_include": ["不支持", "不予"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C05", "type": "easy", "question": "图书拆封后还能退货吗？",
+     "expected_sources": ["category_books.txt"], "expect_answerable": True,
+     "must_include": ["不予", "不支持", "不能"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C06", "type": "easy", "question": "化妆品拆封使用后还能退吗？",
+     "expected_sources": ["category_cosmetics.txt"], "expect_answerable": True,
+     "must_include": ["不予", "不支持", "不能"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C07", "type": "easy", "question": "奶粉拆封后能退换吗？",
+     "expected_sources": ["category_baby.txt"], "expect_answerable": True,
+     "must_include": ["不予", "不支持", "不能"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C08", "type": "easy", "question": "数码产品激活后还能退货吗？",
+     "expected_sources": ["category_digital.txt"], "expect_answerable": True,
+     "must_include": ["质量问题"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C09", "type": "easy", "question": "黄金饰品退货按什么价格折算？",
+     "expected_sources": ["category_jewelry.txt"], "expect_answerable": True,
+     "must_include": ["金价"], "expect_refusal": False, "holdout": False},
+
+    {"id": "C10", "type": "easy", "question": "家具退货运费大概多少钱？",
+     "expected_sources": ["category_furniture.txt"], "expect_answerable": True,
+     "must_include": ["200"], "expect_refusal": False, "holdout": False},
+
+    # ==================== 版本冲突：6 条 ====================
+    # 库里同时有 2025 版和 2026 版。答案必须取新版本——
+    # 只命中旧版就会给出过时的数字。这类题最容易暴露检索排序问题。
+    {"id": "V01", "type": "conflict", "question": "金卡会员现在打几折？",
+     "expected_sources": ["member_benefits_2026.txt"], "expect_answerable": True,
+     "must_include": ["9.5"], "expect_refusal": False, "holdout": False},
+
+    {"id": "V02", "type": "conflict", "question": "价格保护期现在是多久？",
+     "expected_sources": ["price_protection_2026.txt"], "expect_answerable": True,
+     "must_include": ["15"], "expect_refusal": False, "holdout": False},
+
+    {"id": "V03", "type": "conflict", "question": "质量问题退货的运费谁承担？",
+     "expected_sources": ["return_shipping_2026.txt"], "expect_answerable": True,
+     "must_include": ["店铺承担"], "expect_refusal": False, "holdout": False},
+
+    {"id": "V04", "type": "conflict", "question": "会员折扣能和优惠券叠加使用吗？",
+     "expected_sources": ["member_benefits_2026.txt"], "expect_answerable": True,
+     "must_include": ["可以", "能叠加"], "expect_refusal": False, "holdout": False},
+
+    {"id": "V05", "type": "conflict", "question": "促销活动期间产生的价差能申请价格保护吗？",
+     "expected_sources": ["price_protection_2026.txt"], "expect_answerable": True,
+     "must_include": ["可以", "能"], "expect_refusal": False, "holdout": False},
+
+    {"id": "V06", "type": "conflict", "question": "同一个订单可以申请几次价格保护？",
+     "expected_sources": ["price_protection_2026.txt"], "expect_answerable": True,
+     "must_include": ["两次", "2次"], "expect_refusal": False, "holdout": False},
+
+    # ==================== 时效性：4 条 ====================
+    {"id": "TM01", "type": "temporal", "question": "双11活动期间下单的商品，退货时限是多久？",
+     "expected_sources": ["promo_1111_2026.txt"], "expect_answerable": True,
+     "must_include": ["15"], "expect_refusal": False, "holdout": False},
+
+    {"id": "TM02", "type": "temporal", "question": "双11活动期间发货时效是多久？",
+     "expected_sources": ["promo_1111_2026.txt"], "expect_answerable": True,
+     "must_include": ["72"], "expect_refusal": False, "holdout": False},
+
+    {"id": "TM03", "type": "temporal", "question": "春节期间什么时候停止发货？",
+     "expected_sources": ["spring_festival_logistics.txt"], "expect_answerable": True,
+     "must_include": ["1月20"], "expect_refusal": False, "holdout": False},
+
+    {"id": "TM04", "type": "temporal", "question": "运动长裤现在卖多少钱？",
+     "expected_sources": ["price_adjust_notice.txt"], "expect_answerable": True,
+     "must_include": ["79"], "expect_refusal": False, "holdout": False},
+
+    # ==================== 流程细节：8 条 ====================
+    {"id": "F01", "type": "easy", "question": "换货可以换成其他商品吗？",
+     "expected_sources": ["exchange_process.txt"], "expect_answerable": True,
+     "must_include": ["不可以", "不支持", "只能更换同款"], "expect_refusal": False, "holdout": False},
+
+    {"id": "F02", "type": "easy", "question": "维修周期一般是多久？",
+     "expected_sources": ["repair_process.txt"], "expect_answerable": True,
+     "must_include": ["7至15", "7-15", "7到15"], "expect_refusal": False, "holdout": False},
+
+    {"id": "F03", "type": "easy", "question": "部分退款会退回优惠券吗？",
+     "expected_sources": ["coupon_refund_rule.txt"], "expect_answerable": True,
+     "must_include": ["不退回", "不会", "不退"], "expect_refusal": False, "holdout": False},
+
+    {"id": "F04", "type": "easy", "question": "用礼品卡支付的订单退款退到哪里？",
+     "expected_sources": ["gift_card_rule.txt"], "expect_answerable": True,
+     "must_include": ["礼品卡"], "expect_refusal": False, "holdout": False},
+
+    {"id": "F05", "type": "easy", "question": "跨境商品可以无理由退货吗？",
+     "expected_sources": ["cross_border_rule.txt"], "expect_answerable": True,
+     "must_include": ["不支持", "不能"], "expect_refusal": False, "holdout": False},
+
+    {"id": "F06", "type": "easy", "question": "团购订单可以只退其中一件吗？",
+     "expected_sources": ["group_buy_rule.txt"], "expect_answerable": True,
+     "must_include": ["不支持", "不可以", "整单"], "expect_refusal": False, "holdout": False},
+
+    {"id": "F07", "type": "easy", "question": "售后审核通过后几天内要寄回商品？",
+     "expected_sources": ["aftersales_timeline.txt"], "expect_answerable": True,
+     "must_include": ["7"], "expect_refusal": False, "holdout": False},
+
+    {"id": "F08", "type": "easy", "question": "物流信息多久没更新可以发起查件？",
+     "expected_sources": ["logistics_tracking.txt"], "expect_answerable": True,
+     "must_include": ["72"], "expect_refusal": False, "holdout": False},
+
+    # ==================== 新增负例：3 条 ====================
+    # N01（运费）因为新语料已经能回答，改成了正例 V03。
+    # 这里补三条知识库里确实没有的内容，保持负例覆盖。
+    {"id": "N11", "type": "negative", "question": "会员积分可以转赠给其他账号吗？",
+     "expected_sources": ["test_policy.txt"], "expect_answerable": False,
+     "must_include": ["无法", "没有", "未提及", "不对外", "不能确认"],
+     "expect_refusal": True, "holdout": False},
+
+    {"id": "N12", "type": "negative", "question": "可以指定用顺丰发货吗？",
+     "expected_sources": ["shipping_policy.txt"], "expect_answerable": False,
+     "must_include": ["无法", "没有", "未提及", "不对外", "不能确认"],
+     "expect_refusal": True, "holdout": False},
+
+    {"id": "N13", "type": "negative", "question": "支持货到付款吗？",
+     "expected_sources": [], "expect_answerable": False,
+     "must_include": ["无法", "没有", "未提及", "不对外", "不能确认"],
+     "expect_refusal": True, "holdout": False},
 ]
 
 
