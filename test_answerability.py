@@ -1,5 +1,6 @@
 
 import os
+from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -12,23 +13,22 @@ from rag import debug_retrieval
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
-api_key = os.getenv("DEEPSEEK_API_KEY")
+@lru_cache(maxsize=1)
+def get_llm() -> ChatOpenAI:
+    """Create the verifier lazily so importing the API does not need a key."""
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise RuntimeError("没有找到 DEEPSEEK_API_KEY")
+    return ChatOpenAI(
+        model="deepseek-chat",
+        base_url="https://api.deepseek.com",
+        api_key=api_key,
+        temperature=0,
+        extra_body={"thinking": {"type": "disabled"}},
+        timeout=60,
+    )
 
-if not api_key:
-    raise RuntimeError("没有找到 DEEPSEEK_API_KEY")
 
-
-# 2. 初始化证据核查模型
-llm = ChatOpenAI(
-    model="deepseek-chat",
-    base_url="https://api.deepseek.com",
-    api_key=api_key,
-    temperature=0,
-    extra_body={
-        "thinking": {"type": "disabled"}
-    },
-    timeout=60,
-)
 def verify_evidence(question:str,results:list[dict])->str:
     """只判断证据是否充足不负责检索"""
     if not results:
@@ -52,7 +52,7 @@ def verify_evidence(question:str,results:list[dict])->str:
     7. 如果证据不足，输出 NO|缺少的信息。
     
     只输出上述格式，不要添加其他内容。"""
-    response=llm.invoke([
+    response=get_llm().invoke([
         {"role":"system","content":system_prompt},
         {
             "role":"user",
@@ -71,10 +71,5 @@ def check_answerability(question: str)->str:
     return verify_evidence(
         question,
         debug_retrieval(question=question,top_k=3)
-    )
-    # 检索三个候选文档片段
-    results = debug_retrieval(
-        question=question,
-        top_k=3
     )
 

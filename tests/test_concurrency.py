@@ -172,9 +172,24 @@ def test_agent_calls_are_not_serialized():
             transport = httpx.ASGITransport(app=app)
             async with httpx.AsyncClient(transport=transport,
                                          base_url="http://test", timeout=60) as client:
+                login = await client.post(
+                    "/auth/login",
+                    json={"username": "acme-manager", "password": "demo1234"},
+                )
+                assert login.status_code == 200
+                client.headers["Authorization"] = (
+                    f"Bearer {login.json()['access_token']}"
+                )
+                session_ids = []
+                for _ in range(n):
+                    created = await client.post("/sessions", json={})
+                    assert created.status_code == 200
+                    session_ids.append(created.json()["id"])
+
                 async def one(i: int):
                     return await client.post(
-                        "/chat", json={"thread_id": f"conc_{i}", "message": "hi"}
+                        "/chat",
+                        json={"thread_id": session_ids[i], "message": "hi"},
                     )
 
                 start = time.perf_counter()

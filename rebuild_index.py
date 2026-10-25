@@ -20,6 +20,8 @@ rag.build_index() 里有一行 vector_store.reset_collection()，
 注意：重建前请先停掉正在运行的服务，避免两个进程同时写 Chroma。
 """
 
+import hashlib
+
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -52,9 +54,19 @@ def main():
     raw = store.get(include=["documents", "metadatas"])
     uploaded = []
     seen = set()
+    knowledge_docs = load_documents()
+    known_sources = {doc.metadata.get("source") for doc in knowledge_docs}
+    known_content = {
+        hashlib.sha256(doc.page_content.encode("utf-8")).hexdigest()
+        for doc in knowledge_docs
+    }
 
     for text, meta in zip(raw["documents"], raw["metadatas"]):
         if not is_uploaded(meta):
+            continue
+        if meta.get("source") in known_sources:
+            continue
+        if hashlib.sha256((text or "").encode("utf-8")).hexdigest() in known_content:
             continue
         key = (meta.get("doc_id"), meta.get("source"))
         if key in seen:
@@ -71,7 +83,7 @@ def main():
         print(f"        - {doc.metadata.get('source')}")
 
     # ---------- 2. 读取 knowledge/*.txt ----------
-    docs = load_documents()
+    docs = knowledge_docs
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,

@@ -1,8 +1,10 @@
 # 智能售后工单 Agent
 
-面向售后退款场景的工单处理 Agent：**检索政策 → 核查证据是否充分 → 判断可退性 → 提交退款单（需人工审批）→ 幂等防重**。
+面向售后退款场景的工单处理 Agent：**服务端鉴权 → 订单归属核验 → 检索政策 → 核查证据 → 判断可退性 → 人工审批 → 幂等执行 → 失败恢复**。
 
-不是"能回答问题的客服机器人"，而是能走完一条业务流程的系统：答案有对错，操作有后果。
+不是"能回答问题的客服机器人"，而是尝试把 Agent 的建议变成受权限、审批和数据库约束控制的可执行动作。租户、用户与角色来自服务端签发的短期 Bearer token，不接受客户端在聊天请求里自行声明租户。
+
+安全边界、已实现的防护和生产缺口见 [SECURITY.md](SECURITY.md)。
 
 ![对话与人工审批](docs/screenshots/approval.png)
 
@@ -24,7 +26,8 @@
 | Agent | LangGraph 1.2（`create_agent` + `HumanInTheLoopMiddleware`） |
 | 模型 | DeepSeek（OpenAI 兼容接口） |
 | 检索 | Chroma + `bge-small-zh-v1.5`，多租户 `where` 前置过滤 |
-| 持久化 | SQLite（会话 / 记忆 / 工单） |
+| 鉴权 | PBKDF2 密码哈希 + HMAC-SHA256 Bearer token |
+| 持久化 | SQLite（用户 / 会话 / 记忆 / 订单 / 工单 / 退款执行） |
 | 服务 | FastAPI + SSE 流式 |
 | 异步任务 | Celery 5.5 + Redis（broker + result backend） |
 | 记忆 | LangGraph `SqliteSaver`（按 thread_id 隔离） |
@@ -38,37 +41,37 @@
 检索后先由 LLM 判断"证据是否足以回答"，不足则明确拒答，而不是硬编一个答案。检索结果带来源标注，支持追溯。
 
 **2. 写操作人工审批**
-退款申请这类有副作用的操作会通过 LangGraph `interrupt` 暂停，前端弹出确认卡片，用户批准后才真正执行；拒绝则把理由反馈给模型，模型改口。
+退款申请会通过 LangGraph `interrupt` 暂停。服务端在展示卡片前创建 `pending_approval` 工单，把登录用户、租户、会话、订单、金额和退款原因哈希绑定在一起。恢复时必须提交同一 `approval_id`，只改订单号或原因都无法复用审批。
 
-**3. 三层幂等保护**
-接口层用图状态守卫（无待审批直接 409），工具层查库判重（同一订单返回原单号），数据库层用部分唯一索引 `WHERE status='executed'` 兜住并发。前两层都是「读-判断-写」，只有数据库约束能真正防住竞态。
+**3. 退款执行闭环**
+状态流转为 `pending_approval → approved → executing → executed`，失败进入 `failed`。`approved → executing` 使用带源状态条件的原子 UPDATE；下游退款以工单 ID 作为幂等键，并有数据库唯一约束。即使下游成功、工单更新前进程退出，重试也会拿回同一个退款单号。
 
-**4. 可量化的评测体系**
-62 条人工标注测试集：**单轮 50 条**（简单 20 / 改写 15 / 多跳 5 / 近邻难负例 10）+ **多轮 12 条**（指代消解 / 信息补全 / 话题切换各 4 条），其中 10 条 hold-out。
+**4. 分层评测与安全回归**
+62 条人工标注的开发回归集：**单轮 50 条**（简单 20 / 改写 15 / 多跳 5 / 近邻难负例 10）+ **多轮 12 条**（指代消解 / 信息补全 / 话题切换各 4 条），其中 10 条 hold-out。另外有确定性的租户越权、审批绕过、重复执行和崩溃恢复测试。
 
 多轮题靠 `history` 字段逐条回放，让 agent 真实响应每一轮，而不是把历史拼成一条消息——后者测不出 checkpointer 是否真的在累积状态。
 
-**结果**：单轮 50/50、多轮 12/12（连跑 3 次 36/36），平均单题 2.04s。
+本地历史快照曾得到单轮 50/50、多轮 12/12；这组数据规模小，只能说明当前题目通过，不能外推为生产准确率。
 
 **5. 文档索引异步化**
-上传接口立刻返回 `task_id`，解析、切分、向量化在 Celery worker 里跑，前端轮询进度。任务只对瞬时错误重试，幂等键是内容哈希，重试不会产生第二份索引。
+上传接口立刻返回 `task_id`，解析、切分、向量化在 Celery worker 里跑，前端轮询进度。任务只对瞬时错误重试，幂等键是 **租户 + 内容哈希**，避免两个租户上传相同文件时第二份文档被误判为重复。
 
 **6. 无 broker 也能跑**
 Redis 不可用时自动降级为进程内后台线程。这不是妥协——它让项目在任何环境都能演示；生产必须用真 broker，进程内方案进程一挂任务就丢。
 
 **7. 多租户权限过滤（检索前）**
-文档带 `tenant` 元数据，检索时用 Chroma 的 `where` 只在「本租户 + 公共」子集里做 ANN。同一句问题，ACME 看到 99 元协议价、GLOBEX 看到 109 元、未带租户的只能看到标准价并明确拒答。
+文档带 `tenant` 元数据，检索时用 Chroma 的 `where` 只在「token 所属租户 + 公共」子集里做 ANN。聊天、会话、订单、工单和文档接口都会检查登录用户与会话所有权；聊天请求体不接受 `tenant` 字段，客户端无法自行切换租户。
 
 **8. 工单状态机 + 审计**
-退款单从内存字典改为 SQLite 持久化，状态流转 `pending_approval → approved → executed`（或 `rejected` / `failed`）。非法迁移被拒绝，同一订单只能有一张 `executed` 工单——这条规则由**数据库部分唯一索引**保证，不靠代码判重。
+工单保存租户、发起人、审批人、订单金额、载荷哈希、执行单号和错误原因。非法迁移被拒绝；同一租户内同一用户、同一订单只能有一张 `executed` 工单，这条规则由部分唯一索引保证。
 
 **9. 渐进加载的 Skill 机制**
 流程知识（退款五步流程、投诉升级判断、检索降级策略）不再塞进 system prompt，而是拆成 `skills/` 下的独立目录。模型先调 `list_skills` 看目录（名称 + 适用场景），判断相关才用 `load_skill` 加载正文。
 
 实测：3 个技能的目录共 252 字，全量正文 2857 字，**压缩比 11.3 倍**。加一个技能只需加一个目录，不改代码、不动 prompt。
 
-**10. 并发吞吐：从 1.00x 到 17.4x**
-原来有一把全局锁包住整个 agent 调用，把系统完全串行化。压测实测（20 并发 / 单请求 0.8s）：
+**10. 一次错误串行化的定位**
+早期版本有一把全局锁包住整个 Agent 调用，把 I/O 等待也串行化。固定延迟压测（20 并发 / 单请求 0.8s）：
 
 | | 改造前 | 改造后 |
 |---|---|---|
@@ -77,7 +80,7 @@ Redis 不可用时自动降级为进程内后台线程。这不是妥协——�
 | P50 延迟 | 8.83s | **0.90s** |
 | 实际并行度 | 1.00x | **17.43x** |
 
-改动：拆锁（LangGraph 图本身无状态，状态在 checkpointer 按 thread_id 隔离）、SQLite 开 WAL、修连接泄漏、用长连接钉住 `-wal`/`-shm`（并发首写会竞争创建这两个文件，实测 8 线程里 7 个报 readonly）。
+这 17 倍的含义是“移除了自己引入的串行化”，不是证明真实 LLM 服务具备 20 QPS 承载力。测试使用本地 ASGI 与固定 sleep 假 Agent，没有覆盖模型限流、外部支付接口和网络抖动，只适合定位锁竞争。
 
 ---
 
@@ -85,15 +88,19 @@ Redis 不可用时自动降级为进程内后台线程。这不是妥协——�
 
 ```mermaid
 flowchart LR
-    U[浏览器] -->|SSE| API[FastAPI]
+    U[浏览器] -->|登录 + Bearer token| API[FastAPI]
+    API --> AUTH[身份 / 租户 / 角色]
     API --> AG[LangGraph Agent]
+    AG -->|订单号| ORDERS[(订单库)]
     AG -->|检索| RAG[RAG 工具]
     RAG --> VDB[(Chroma)]
     RAG --> GATE[证据核查]
     GATE -->|证据不足| REFUSE[拒答]
     GATE -->|证据充分| AG
     AG -->|写操作| HITL[人工审批]
-    HITL -->|批准| TOOL[提交退款单]
+    HITL -->|审批 ID + 载荷哈希| TOOL[原子抢占退款]
+    TOOL --> EXEC[幂等执行 / 对账]
+    EXEC --> ORDERS
     HITL -->|拒绝| AG
     AG --> CP[(SqliteSaver)]
 
@@ -110,8 +117,9 @@ flowchart LR
 ### Docker（推荐）
 
 ```bash
-# 1. 配置密钥
-echo "DEEPSEEK_API_KEY=sk-xxxx" > .env
+# 1. 配置模型密钥与 token 签名密钥
+cp .env.example .env
+# 编辑 .env，填写 DEEPSEEK_API_KEY 和随机 AUTH_SECRET
 
 # 2. 指定模型缓存目录（宿主机已有 bge-small-zh-v1.5 的话）
 export HF_CACHE_DIR=~/.cache/huggingface
@@ -124,6 +132,19 @@ docker compose exec app python rebuild_index.py
 ```
 
 打开 http://localhost:8000
+
+演示账号统一密码为 `demo1234`：
+
+| 账号 | 租户 | 权限 |
+|---|---|---|
+| `acme-manager` | acme | 客户 + 审批 + 知识库管理 |
+| `acme-user` | acme | 客户 |
+| `globex-user` | globex | 客户 |
+| `platform-admin` | public | 管理员 |
+
+演示订单 `A100`、`A200` 属于 `acme-manager`，可用于走完整退款审批与执行流程。
+
+Docker 模式下所有运行态数据库写入挂载目录 `./data`；本地默认仍使用项目根目录，也可以通过 `AGENT_DATA_DIR` 改到其他目录。
 
 **构建说明**
 
@@ -148,7 +169,8 @@ docker build \
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 
-echo "DEEPSEEK_API_KEY=sk-xxxx" > .env
+cp .env.example .env
+# 填写 DEEPSEEK_API_KEY 和 AUTH_SECRET
 
 python rebuild_index.py          # 首次运行
 uvicorn api:app --port 8000
@@ -167,13 +189,15 @@ celery -A celery_app.celery_app worker --loglevel=info --pool=solo
 ### 跑测试
 
 ```bash
-pytest                    # 114 个用例，约 26 秒，不调用大模型
+pytest                    # 默认不调用大模型
 pytest -m llm             # 需要真实模型的端到端测试
 ```
 
+GitHub Actions 会运行核心鉴权/退款单测、Python 编译检查和前端内联 JavaScript 语法检查；依赖完整模型的集成测试仍建议在本地或 Docker 中执行。
+
 ---
 
-## 评测结果
+## 评测结果（本地历史快照）
 
 22 篇知识库文档（含 2 篇租户专属）/ 62 条测试集（单轮 50 + 多轮 12），其中 10 条为 hold-out（只用于验收，不参与调参）。
 
@@ -203,6 +227,14 @@ python evaluate_answerability.py  # 证据核查二分类
 python evaluate_agent.py          # 端到端任务成功率
 python tune_rrf.py                # RRF 权重扫描（仅用非 hold-out）
 ```
+
+如果进程在用户批准后、退款结果写回前退出，可以重复执行对账：
+
+```bash
+python reconcile_refunds.py
+```
+
+对账会复用原审批载荷和工单 ID 作为幂等键，不会生成第二笔退款。
 
 ---
 
@@ -241,22 +273,43 @@ python tune_rrf.py                # RRF 权重扫描（仅用非 hold-out）
 
 结论：保留代码（换到含大量精确实体的语料时 BM25 有价值），默认走纯向量。这个负结果记录在 `retrieval.py` 的注释里。
 
-### 3. 三层幂等，而不是只做一层
+### 3. 退款执行的五层防护
 
-- **接口层**：`/chat/resume` 先检查图状态，无待审批直接 409 —— 挡住用户双击
-- **工具层**：`create_refund_request` 先查库有无已执行的退款单 —— 挡住任何重放
-- **数据库层**：`order_id` 上建**部分唯一索引** `WHERE status = 'executed'` —— 挡住并发
+退款是不可逆的写操作。这里的防护不是"加一把锁"，而是每层挡不同的东西：
 
-前两层都是"读-判断-写"，并发下存在竞态：两个请求同时查到"没有"，然后都去写。只有数据库约束能真正兜住。
+| 层 | 机制 | 挡住什么 |
+|---|---|---|
+| 接口层 | `/chat/resume` 先查图状态，无待审批直接 409 | 用户双击 |
+| 审批绑定 | 审批记录绑定 `tenant + requester + thread + order + amount + 归一化原因` 的 SHA256 | 改金额、改原因、换会话复用审批 |
+| 执行抢占 | `approved → executing` 用 `UPDATE … WHERE id=? AND status=?`，靠 `rowcount == 1` 判定 | 多进程同时执行 |
+| 数据库约束 | `(tenant_id, requester_id, order_id)` 上的部分唯一索引 `WHERE status='executed'` | 并发写入 |
+| 下游幂等 | 退款请求以**工单 ID** 为幂等键 | 退款成功但工单未写回时崩溃，重试不重复退款 |
 
-用**部分**唯一索引而不是普通唯一索引，是因为被拒绝的申请可以有多条，同一订单只有成功退款才唯一。这条业务规则直接写进索引定义，比在代码里判断更可靠。
+前四层里，前三层都是「读-判断-写」，并发下有竞态：两个请求同时查到「没有」，然后都去写。只有数据库约束能真正兜住。
+
+#### 唯一索引为什么带了租户和用户
+
+第一版是 `UNIQUE(order_id) WHERE status='executed'`，看着没问题，实际有个很隐蔽的 bug：
+
+**订单号是商家自己的编号，不是全局唯一的。** acme 的 A100 和 globex 的 A100 是两笔不同订单。
+按 `order_id` 建唯一索引意味着 acme 退过 A100 之后，globex 的 A100 就再也退不了——
+而且报错是「该订单已提交过退款申请」，排查起来非常费劲。
+
+修正后索引键是 `(tenant_id, requester_id, order_id)`。这个作用域不是随手加的：
+它和 `orders.get_order()` 的归属过滤条件（`WHERE order_id=? AND tenant_id=? AND user_id=?`）完全一致。
+**索引的作用域必须和业务实体的归属作用域对齐**，否则要么漏挡，要么误挡。
+
+#### 为什么是"部分"唯一索引
+
+被拒绝的申请可以有多条，同一订单只有成功退款才唯一。
+`WHERE status='executed'` 把这条业务规则直接写进索引定义，比在代码里判断更可靠，也更容易审计。
 
 ### 4. 测试分两层
 
 - 用 `FakeAgent` 替换真实 Agent 测 SSE 协议和审批流程：**毫秒级、零成本、结果确定**
 - 真实模型的端到端测试标记 `@pytest.mark.llm`，默认不跑
 
-44 个用例 16 秒跑完。如果每个用例都真调模型，一次要几分钟还烧钱，没人会跑第二遍。
+协议测试可以低成本反复执行；真实模型端到端用例单独标记，避免每次提交都烧 token。
 
 ### 5. 启动耗时从 23 分钟降到 11 秒
 
@@ -339,6 +392,8 @@ pending_approval → approved → executed
 |---|---|---|
 | GET | `/` | 聊天界面 |
 | GET | `/knowledge` | 知识库管理界面 |
+| POST | `/auth/login` | 登录并签发短期 Bearer token |
+| GET | `/auth/me` | 当前用户、租户和角色 |
 | POST | `/sessions` | 新建会话 |
 | GET | `/sessions` | 会话列表 |
 | PATCH | `/sessions/{id}` | 重命名 |
@@ -351,6 +406,7 @@ pending_approval → approved → executed
 | GET | `/knowledge/documents` | 文档列表 |
 | DELETE | `/knowledge/documents/{id}` | 删除文档 |
 | GET | `/tickets` | 工单列表（审批审计记录） |
+| GET | `/orders` | 当前用户可见订单与退款资格 |
 | GET | `/skills` | 技能清单与体积统计 |
 | GET | `/health` | 存活探针 |
 | GET | `/ready` | 就绪探针（校验向量库 / 工单库 / 会话库） |
@@ -370,6 +426,10 @@ status → (tool | token)* → interrupt 或 done
 
 ```
 api.py                  FastAPI 应用、会话管理、SSE、审批接口
+auth.py                 密码哈希、Bearer token、服务端租户与角色
+orders.py               订单归属、退款资格、幂等退款网关
+refund_service.py       审批绑定、原子抢占、执行与对账
+reconcile_refunds.py    对账批处理：恢复已批准/执行中的退款工单
 rag.py                  索引构建、文档增删、检索、证据格式化、多租户过滤
 retrieval.py            四种检索策略（vector / bm25 / hybrid / rerank）
 test_answerability.py   证据核查（verify_evidence）
@@ -394,11 +454,13 @@ knowledge.html          知识库管理界面
 knowledge/              22 篇语料（20 篇公共 + 2 篇租户专属）
 docs/screenshots/       README 用的界面截图
 
-tests/                  pytest 用例（114 个，26 秒）
+tests/                  pytest 用例（协议、租户、退款状态机、安全与并发）
   test_sessions.py        会话 CRUD 与会话隔离
   test_knowledge.py       异步索引、去重、超限
   test_retrieval.py       检索策略与索引完整性
   test_chat_sse.py        SSE 协议与审批流程（FakeAgent）
+  test_auth.py            token、租户边界与会话所有权
+  test_refund_workflow.py 审批绑定、幂等执行与崩溃恢复
   test_tenant.py          多租户权限过滤
   test_tickets.py         工单状态机
   test_skills.py          Skill 扫描、解析、渐进加载
@@ -417,8 +479,9 @@ Dockerfile / docker-compose.yml / requirements.txt
 
 ## 已知限制
 
-- **知识库规模小**（20 篇 / 20 个 chunk）。`Recall@5` 在此规模下必然接近 100%，真正有区分度的是 `Hit@1` 和 `MRR@10`。要让它有意义需要 100+ chunk。
+- **知识库规模小**（22 篇 / 约 20+ 个 chunk）。`Recall@5` 在此规模下必然接近 100%，真正有区分度的是 `Hit@1` 和 `MRR@10`。要让它有意义需要 100+ chunk。
 - **Agent 端到端 100% 是天花板问题**。题目与文档边界清晰，难负例的"缺失信息"都是文档里完全没出现过的概念，拒答偏容易。想做出区分度需要"边界可答性"题或"文档冲突"题。
 - **检索仍是纯向量**。BM25 融合已验证无收益，Reranker 因网络原因未接入（`download_reranker.py` 可补齐）。
 - **写操作仍是串行**。全局锁已拆除，读和 LLM 调用可以并发；但 SQLite 只允许一个写者，高并发写入仍需换 PostgreSQL。这是单机 SQLite 的固有限制，不是实现问题。
-- **写操作为模拟实现**。`create_refund_request` 存在内存字典里，重启即丢；真实项目应落库并加唯一索引。
+- **退款下游是本地模拟网关**。订单与执行记录已落 SQLite，并通过幂等键模拟真实退款接口；生产接入支付/ERP 时仍需要签名验证、对账窗口和人工补偿流程。
+- **认证是演示级身份库**。密码哈希、签名 token 和服务端授权边界已经存在，但生产环境应替换为公司 IdP/OIDC，并由密钥管理系统托管 `AUTH_SECRET`。

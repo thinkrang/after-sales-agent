@@ -9,6 +9,7 @@
 """
 
 import time
+import hashlib
 
 import pytest
 
@@ -72,8 +73,8 @@ def test_upload_returns_task_id_immediately(client):
     body = r.json()
     assert body["task_id"]
     assert body["status"] == "queued"
-    assert body["doc_id"] == __import__("hashlib").sha256(
-        TEST_DOC.encode("utf-8")
+    assert body["doc_id"] == hashlib.sha256(
+        b"acme\0" + TEST_DOC.encode("utf-8")
     ).hexdigest()
     # mode 说明走的哪条路：celery（有 Redis）或 inline（降级）
     assert body["mode"] in ("celery", "inline")
@@ -99,7 +100,7 @@ def test_upload_indexes_document(client):
 def test_upload_same_content_twice_is_deduplicated(client):
     """同样内容再传一次应识别为重复，不能重复入库。
 
-    幂等键是内容哈希，所以两次 doc_id 必须一致，
+    幂等键是租户 + 内容哈希，所以两次 doc_id 必须一致，
     第二次任务的 result.duplicate 应为 True。
     """
     name = "pytest_dedup_case.txt"

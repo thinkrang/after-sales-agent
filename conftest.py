@@ -11,34 +11,77 @@
 """
 
 import pytest
-from fastapi.testclient import TestClient
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
-
-from api import app
 
 
 @pytest.fixture(scope="session", autouse=True)
 def isolate_ticket_db(tmp_path_factory):
-    """把工单库指向临时文件。
+    """Point all runtime SQLite databases at isolated temporary files.
 
     没有这道隔离，测 SSE 协议时会真的往 tickets.sqlite 写工单
     （_stream_agent 发现待审批动作就会建单），跑几次测试数据库里
     就全是 A1 / C3 这种假订单。
     """
+    import auth
+    import orders
     import tickets
 
-    original = tickets.DB_PATH
-    tickets.DB_PATH = tmp_path_factory.mktemp("tickets") / "tickets_test.sqlite"
+    root = tmp_path_factory.mktemp("runtime-db")
+    originals = {
+        "tickets": tickets.DB_PATH,
+        "auth": auth.USER_DB,
+        "orders": orders.ORDERS_DB,
+    }
+    tickets.DB_PATH = root / "tickets_test.sqlite"
+    auth.USER_DB = root / "auth_test.sqlite"
+    orders.ORDERS_DB = root / "orders_test.sqlite"
     tickets.init_tickets_table()
-    yield
-    tickets.DB_PATH = original
+    orders.init_order_db()
+    yield root
+    tickets.DB_PATH = originals["tickets"]
+    auth.USER_DB = originals["auth"]
+    orders.ORDERS_DB = originals["orders"]
+    import db
+
+    db.release_all()
 
 
 @pytest.fixture(scope="session")
-def client():
+def client(isolate_ticket_db):
     """整个测试会话共用一个 TestClient（只加载一次模型）。"""
+    from fastapi.testclient import TestClient
+    from api import app
+
+    app_module = __import__("api")
+    app_module.SESSION_DB = isolate_ticket_db / "sessions_test.sqlite"
+    app_module.MEMORY_DB = isolate_ticket_db / "memory_test.sqlite"
+
     with TestClient(app) as c:
+        response = c.post(
+            "/auth/login",
+            json={"username": "acme-manager", "password": "demo1234"},
+        )
+        assert response.status_code == 200, response.text
+        c.headers["Authorization"] = (
+            f"Bearer {response.json()['access_token']}"
+        )
         yield c
+
+
+@pytest.fixture
+def login_as(client):
+    """Return a helper that issues a token without mutating global client state."""
+
+    def _login(username: str, password: str = "demo1234") -> dict[str, str]:
+        response = client.post(
+            "/auth/login",
+            json={"username": username, "password": password},
+        )
+        assert response.status_code == 200, response.text
+        return {
+            "Authorization": f"Bearer {response.json()['access_token']}"
+        }
+
+    return _login
 
 
 @pytest.fixture
@@ -100,6 +143,8 @@ class FakeAgent:
 @pytest.fixture
 def fake_agent():
     """把 app.state.agent 换成 FakeAgent，测试结束后还原。"""
+    from api import app
+
     original = app.state.agent
     fake = FakeAgent()
     app.state.agent = fake
@@ -114,6 +159,8 @@ def fake_agent():
 
 def token_chunks(text: str, node: str = "model"):
     """把一段文本拆成若干 token 块，模拟流式输出。"""
+    from langchain_core.messages import AIMessageChunk
+
     out = []
     for ch in text:
         out.append((AIMessageChunk(content=ch), {"langgraph_node": node}))
@@ -121,12 +168,16 @@ def token_chunks(text: str, node: str = "model"):
 
 
 def tool_message(name: str, text: str):
+    from langchain_core.messages import ToolMessage
+
     return (ToolMessage(content=text, name=name, tool_call_id="call_1"),
             {"langgraph_node": "tools"})
 
 
 def history(*texts):
     """构造一段历史消息（交替 human/ai）。"""
+    from langchain_core.messages import AIMessage, HumanMessage
+
     msgs = []
     for i, text in enumerate(texts):
         msgs.append(HumanMessage(content=text) if i % 2 == 0 else AIMessage(content=text))

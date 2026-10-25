@@ -5,6 +5,24 @@
 """
 
 from conftest import token_chunks, tool_message
+from auth import User
+import refund_service
+
+
+def _prepare_pending(sid: str, order_id: str = "A100", reason: str = "质量问题"):
+    user = User(
+        "acme-manager",
+        "ACME 售后主管",
+        "acme",
+        frozenset({"customer", "approver"}),
+    )
+    ticket, _ = refund_service.prepare_ticket(
+        user,
+        thread_id=sid,
+        order_id=order_id,
+        reason=reason,
+    )
+    return ticket
 
 
 def _post_stream(client, sid, message="测试问题"):
@@ -54,8 +72,13 @@ def test_stream_emits_interrupt_instead_of_done(client, fake_agent, session_id, 
     用户会以为程序卡住。
     """
     fake_agent.script = token_chunks("准备提交")
+    ticket = _prepare_pending(session_id)
     fake_agent.pending[session_id] = [
-        {"name": "create_refund_request", "args": {"order_id": "A1"}, "description": "需要审批"}
+        {
+            "name": "create_refund_request",
+            "args": {"order_id": "A100", "reason": "质量问题"},
+            "description": "需要审批",
+        }
     ]
 
     events = sse(_post_stream(client, session_id).text)
@@ -67,35 +90,60 @@ def test_stream_emits_interrupt_instead_of_done(client, fake_agent, session_id, 
     payload = [d for k, d in events if k == "interrupt"][0]
     assert payload["thread_id"] == session_id
     assert payload["actions"][0]["name"] == "create_refund_request"
-    assert payload["actions"][0]["args"] == {"order_id": "A1"}
+    assert payload["actions"][0]["approval_id"] == ticket["id"]
+    assert payload["actions"][0]["args"]["order_id"] == "A100"
 
 
 def test_pending_survives_page_reload(client, fake_agent, session_id):
     """刷新页面后必须还能拿到待审批动作，否则会话卡死。"""
     fake_agent.pending[session_id] = [
-        {"name": "create_refund_request", "args": {"order_id": "B2"}, "description": "d"}
+        {
+            "name": "create_refund_request",
+            "args": {"order_id": "A100", "reason": "质量问题"},
+            "description": "d",
+        }
     ]
+    _prepare_pending(session_id)
 
     body = client.get(f"/sessions/{session_id}/messages").json()
     assert len(body["pending"]) == 1
-    assert body["pending"][0]["args"] == {"order_id": "B2"}
+    assert body["pending"][0]["args"]["order_id"] == "A100"
 
 
 def test_resume_without_pending_returns_409(client, fake_agent, session_id):
     """防重复提交：没有待审批就必须 409，否则写操作会被执行两次。"""
     fake_agent.pending.pop(session_id, None)
 
-    r = client.post("/chat/resume", json={"thread_id": session_id, "decision": "approve"})
+    r = client.post(
+        "/chat/resume",
+        json={
+            "thread_id": session_id,
+            "approval_id": "not-a-pending-record",
+            "decision": "approve",
+        },
+    )
     assert r.status_code == 409
 
 
 def test_resume_approve_streams_answer(client, fake_agent, session_id, sse):
     fake_agent.pending[session_id] = [
-        {"name": "create_refund_request", "args": {"order_id": "C3"}, "description": "d"}
+        {
+            "name": "create_refund_request",
+            "args": {"order_id": "A100", "reason": "质量问题"},
+            "description": "d",
+        }
     ]
+    ticket = _prepare_pending(session_id)
     fake_agent.script = token_chunks("已提交")
 
-    r = client.post("/chat/resume", json={"thread_id": session_id, "decision": "approve"})
+    r = client.post(
+        "/chat/resume",
+        json={
+            "thread_id": session_id,
+            "approval_id": ticket["id"],
+            "decision": "approve",
+        },
+    )
     assert r.status_code == 200
 
     events = sse(r.text)
@@ -105,12 +153,20 @@ def test_resume_approve_streams_answer(client, fake_agent, session_id, sse):
 
 def test_resume_reject_is_accepted(client, fake_agent, session_id, sse):
     fake_agent.pending[session_id] = [
-        {"name": "create_refund_request", "args": {}, "description": "d"}
+        {
+            "name": "create_refund_request",
+            "args": {"order_id": "A100", "reason": "质量问题"},
+            "description": "d",
+        }
     ]
+    ticket = _prepare_pending(session_id)
     fake_agent.script = token_chunks("好的")
 
     r = client.post("/chat/resume", json={
-        "thread_id": session_id, "decision": "reject", "message": "信息不全",
+        "thread_id": session_id,
+        "approval_id": ticket["id"],
+        "decision": "reject",
+        "message": "信息不全",
     })
     assert r.status_code == 200
 
@@ -122,7 +178,14 @@ def test_resume_reject_is_accepted(client, fake_agent, session_id, sse):
 
 
 def test_resume_rejects_invalid_decision(client, session_id):
-    r = client.post("/chat/resume", json={"thread_id": session_id, "decision": "maybe"})
+    r = client.post(
+        "/chat/resume",
+        json={
+            "thread_id": session_id,
+            "approval_id": "not-a-pending-record",
+            "decision": "maybe",
+        },
+    )
     assert r.status_code == 422
 
 

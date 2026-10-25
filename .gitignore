@@ -13,6 +13,7 @@
 vector_db/
 uploads/
 hf_cache/
+data/
 
 # ============ Python ============
 __pycache__/
@@ -37,3 +38,4 @@ Thumbs.db
 # ============ 临时文件 ============
 *.log
 *.tmp
+_acceptance_data/

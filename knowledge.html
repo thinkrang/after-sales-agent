@@ -190,6 +190,26 @@
 
 <script>
 
+const TOKEN_KEY = "after_sales_access_token";
+
+async function authFetch(url, options = {}) {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+        location.href = "/";
+        throw new Error("请先登录");
+    }
+    const headers = Object.assign({}, options.headers || {}, {
+        Authorization: "Bearer " + token
+    });
+    const response = await fetch(url, Object.assign({}, options, { headers }));
+    if (response.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        location.href = "/";
+        throw new Error("登录已过期");
+    }
+    return response;
+}
+
 const fileInput =
     document.getElementById("fileInput");
 
@@ -216,7 +236,7 @@ function showStatus(message, isError = false) {
 // 1. 加载知识库列表
 async function loadDocuments() {
 
-    const response = await fetch(
+    const response = await authFetch(
         "/knowledge/documents"
     );
 
@@ -308,7 +328,7 @@ async function waitForTask(taskId) {
 
     while (Date.now() < deadline) {
 
-        const response = await fetch(
+        const response = await authFetch(
             "/knowledge/tasks/" + encodeURIComponent(taskId)
         );
 
@@ -353,7 +373,7 @@ if (!allowed.some(ext => lowerName.endsWith(ext))) {
     return;
 }
 
-    if (file.size > 200 * 1024) {
+    if (file.size > 5 * 1024 * 1024) {
         showStatus("文件不能超过 5MB", true);
         return;
     }
@@ -366,7 +386,7 @@ if (!allowed.some(ext => lowerName.endsWith(ext))) {
 
     try {
 
-        const response = await fetch(
+        const response = await authFetch(
             "/knowledge/upload",
             {
                 method: "POST",
@@ -421,7 +441,7 @@ async function deleteDocument(docId, filename) {
 
     try {
 
-        const response = await fetch(
+        const response = await authFetch(
             "/knowledge/documents/" +
             encodeURIComponent(docId),
             {

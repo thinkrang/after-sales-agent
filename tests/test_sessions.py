@@ -56,11 +56,9 @@ def test_delete_is_idempotent(client):
     assert client.delete(f"/sessions/{sid}").status_code == 200
 
 
-def test_messages_of_missing_session_returns_empty(client):
+def test_messages_of_missing_session_returns_404(client):
     r = client.get("/sessions/never_existed_xxx/messages")
-    assert r.status_code == 200
-    assert r.json()["messages"] == []
-    assert r.json()["pending"] == []
+    assert r.status_code == 404
 
 
 def test_session_isolation(client, fake_agent):

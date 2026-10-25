@@ -100,7 +100,11 @@ def tenant_filter(tenant: str | None) -> dict | None:
 def load_documents():
     documents = []
 
-    files = sorted(KNOWLEDGE_DIR.glob("*.txt"))
+    files = sorted(
+        path
+        for suffix in ("*.txt", "*.md")
+        for path in KNOWLEDGE_DIR.glob(suffix)
+    )
 
     if not files:
         raise FileNotFoundError(
@@ -278,14 +282,15 @@ def add_txt_document(filename:str,file_bytes)->dict:
         }
 
 # 查询知识库文档列表
-def list_knowledge_documents():
+def list_knowledge_documents(tenant: str | None = None):
 
     store = get_vector_store()
 
+    get_kwargs = {"include": ["metadatas"]}
+    if tenant:
+        get_kwargs["where"] = tenant_filter(tenant)
     with index_lock:
-        records = store.get(
-            include=["metadatas"]
-        )
+        records = store.get(**get_kwargs)
 
     documents = {}
 
@@ -328,7 +333,11 @@ def list_knowledge_documents():
 
 
 # 删除指定的上传文档及向量
-def delete_knowledge_document(doc_id: str):
+def delete_knowledge_document(
+    doc_id: str,
+    *,
+    tenant: str | None = None,
+):
 
     # 防止非法 ID
     if not re.fullmatch(r"[0-9a-f]{64}", doc_id):
@@ -340,7 +349,11 @@ def delete_knowledge_document(doc_id: str):
 
         # 查找属于该文档的所有向量
         records = store.get(
-            where={"doc_id": doc_id}
+            where=(
+                {"$and": [{"doc_id": doc_id}, {"tenant": tenant}]}
+                if tenant
+                else {"doc_id": doc_id}
+            )
         )
 
         ids = records["ids"]
@@ -381,8 +394,12 @@ def add_knowledge_document(
     if not file_bytes or len(file_bytes) > 5 * 1024 * 1024:
         raise ValueError("文件不能为空，且不能超过 5MB")
 
-    # 与之前 TXT 上传保持相同的文档 ID 规则
-    doc_id = hashlib.sha256(file_bytes).hexdigest()
+    # Include the tenant in the idempotency key. Hashing content alone makes a
+    # tenant-B upload look like a duplicate of the same bytes in tenant A,
+    # causing the second tenant to receive an unretrievable document.
+    doc_id = hashlib.sha256(
+        owner.encode("utf-8") + b"\0" + file_bytes
+    ).hexdigest()
 
     documents = []
 

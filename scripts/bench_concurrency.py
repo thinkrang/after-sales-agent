@@ -51,14 +51,18 @@ class SlowStubAgent:
         yield SimpleNamespace(content=""), {"langgraph_node": "model"}
 
 
-async def fire(client: httpx.AsyncClient, n: int) -> list[float]:
+async def fire(
+    client: httpx.AsyncClient,
+    n: int,
+    session_ids: list[str],
+) -> list[float]:
     """并发打 n 个请求，返回每个请求的耗时。"""
 
     async def one(i: int) -> float:
         t0 = time.perf_counter()
         r = await client.post(
             "/chat",
-            json={"thread_id": f"bench_{i}", "message": "你好"},
+            json={"thread_id": session_ids[i], "message": "你好"},
         )
         r.raise_for_status()
         return time.perf_counter() - t0
@@ -81,11 +85,25 @@ async def main(n: int, delay: float) -> None:
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://bench", timeout=120) as client:
+            login = await client.post(
+                "/auth/login",
+                json={"username": "acme-manager", "password": "demo1234"},
+            )
+            login.raise_for_status()
+            client.headers["Authorization"] = (
+                f"Bearer {login.json()['access_token']}"
+            )
+            session_ids = []
+            for _ in range(n + 1):
+                created = await client.post("/sessions", json={})
+                created.raise_for_status()
+                session_ids.append(created.json()["id"])
+
             # 预热，避开首次请求的线程池/连接建立开销
-            await fire(client, 1)
+            await fire(client, 1, session_ids[:1])
 
             t0 = time.perf_counter()
-            latencies = await fire(client, n)
+            latencies = await fire(client, n, session_ids[1:])
             wall = time.perf_counter() - t0
 
         print()

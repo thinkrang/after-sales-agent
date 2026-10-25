@@ -53,15 +53,10 @@ def answer_of(events: list[tuple[str, dict]]) -> str:
     return "".join(d.get("text", "") for k, d in events if k == "token")
 
 
-@pytest.fixture
-def order_id():
-    """每个用例用独立订单号，避免互相干扰。"""
-    return "T" + uuid.uuid4().hex[:8].upper()
-
-
-def test_interrupt_then_approve(client, order_id):
+def test_interrupt_then_approve(client):
     """提出退款 → 中断 → 批准 → 工单 executed。"""
     tid = "llm_" + uuid.uuid4().hex[:10]
+    order_id = "A100"
 
     try:
         # 1) 提出退款，应该停在审批点
@@ -77,26 +72,33 @@ def test_interrupt_then_approve(client, order_id):
 
         interrupt = next(d for k, d in events if k == "interrupt")
         assert interrupt["actions"][0]["name"] == "create_refund_request"
+        approval_id = interrupt["actions"][0]["approval_id"]
 
         # 此刻不该有已执行的退款单
-        assert tickets.find_executed(order_id) is None
+        assert tickets.find_executed(
+            order_id, tenant_id="acme", requester_id="acme-manager"
+        ) is None
 
         # 工单应该处于待审批
-        pending = tickets.find_pending(tid)
+        pending = tickets.find_pending(
+            tid, tenant_id="acme", requester_id="acme-manager"
+        )
         assert pending is not None
         assert pending["status"] == tickets.PENDING
 
         # 2) 批准
         r2 = client.post("/chat/resume", json={
             "thread_id": tid,
+            "approval_id": approval_id,
             "decision": "approve",
-            "tenant": interrupt.get("tenant"),
         })
         events2 = parse_sse(r2.text)
         assert answer_of(events2), "批准后应该有回答"
 
         # 3) 工单应该流转到 executed
-        executed = tickets.find_executed(order_id)
+        executed = tickets.find_executed(
+            order_id, tenant_id="acme", requester_id="acme-manager"
+        )
         assert executed is not None
         assert executed["status"] == tickets.EXECUTED
         assert executed["refund_id"]
@@ -104,31 +106,44 @@ def test_interrupt_then_approve(client, order_id):
 
         # 4) 重复批准应被 409 挡住
         r3 = client.post("/chat/resume", json={
-            "thread_id": tid, "decision": "approve",
+            "thread_id": tid,
+            "approval_id": approval_id,
+            "decision": "approve",
         })
         assert r3.status_code == 409
 
         # 5) 确认没有重复建单
-        assert len([t for t in tickets.list_tickets(200) if t["order_id"] == order_id]) == 1
+        assert len([
+            t
+            for t in tickets.list_tickets(
+                200, tenant_id="acme", requester_id="acme-manager"
+            )
+            if t["order_id"] == order_id
+        ]) == 1
 
     finally:
         client.delete(f"/sessions/{tid}")
 
 
-def test_interrupt_then_reject(client, order_id):
+def test_interrupt_then_reject(client):
     """拒绝路径：工单 rejected，工具不执行。"""
     tid = "llm_" + uuid.uuid4().hex[:10]
+    order_id = "A200"
 
     try:
         r = client.post("/chat/stream", json={
             "thread_id": tid,
             "message": REFUND_REQUEST.format(order=order_id),
         })
-        if not any(k == "interrupt" for k, _ in parse_sse(r.text)):
+        events = parse_sse(r.text)
+        if not any(k == "interrupt" for k, _ in events):
             pytest.skip("本次模型没有触发写操作（可能先去查政策了），跳过")
+        interrupt = next(d for k, d in events if k == "interrupt")
+        approval_id = interrupt["actions"][0]["approval_id"]
 
         r2 = client.post("/chat/resume", json={
             "thread_id": tid,
+            "approval_id": approval_id,
             "decision": "reject",
             "message": "需要用户补充订单截图",
         })
@@ -136,10 +151,14 @@ def test_interrupt_then_reject(client, order_id):
         assert answer_of(parse_sse(r2.text)), "拒绝后模型应该给出回应"
 
         # 工具不该执行
-        assert tickets.find_executed(order_id) is None
+        assert tickets.find_executed(
+            order_id, tenant_id="acme", requester_id="acme-manager"
+        ) is None
 
         # 工单应该是 rejected
-        rejected = [t for t in tickets.list_tickets(200)
+        rejected = [t for t in tickets.list_tickets(
+            200, tenant_id="acme", requester_id="acme-manager"
+        )
                     if t["order_id"] == order_id and t["status"] == tickets.REJECTED]
         assert rejected, "拒绝后应有一条 rejected 工单"
         assert rejected[0]["decision"] == "reject"

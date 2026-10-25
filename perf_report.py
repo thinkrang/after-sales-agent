@@ -11,7 +11,7 @@
 import sys
 
 import perf
-from api import _REFUND_STORE, app, search_shop_info
+from api import app, search_shop_info
 from eval_dataset import retrieval_cases
 
 QUESTIONS = [
@@ -45,8 +45,22 @@ def bench_agent(n: int):
     print(f"\n[2/2] 完整 Agent 对话 × {n} 次（会真实调用大模型）")
     tool_counts = []
     with TestClient(app) as client:
+        login = client.post(
+            "/auth/login",
+            json={"username": "acme-manager", "password": "demo1234"},
+        )
+        login.raise_for_status()
+        client.headers["Authorization"] = (
+            f"Bearer {login.json()['access_token']}"
+        )
         for i, q in enumerate(QUESTIONS[:n], 1):
-            r = client.post("/chat/stream", json={"thread_id": f"perf_{i}", "message": q})
+            created = client.post("/sessions", json={"title": f"perf_{i}"})
+            created.raise_for_status()
+            thread_id = created.json()["id"]
+            r = client.post(
+                "/chat/stream",
+                json={"thread_id": thread_id, "message": q},
+            )
             if r.status_code != 200:
                 print(f"  第 {i} 次失败: HTTP {r.status_code}")
             else:
@@ -54,7 +68,7 @@ def bench_agent(n: int):
                 n_tools = r.text.count("event: tool")
                 tool_counts.append(n_tools)
                 print(f"  第 {i} 次完成，工具调用 {n_tools} 次")
-            client.delete(f"/sessions/perf_{i}")
+            client.delete(f"/sessions/{thread_id}")
     return tool_counts
 
 
@@ -119,8 +133,6 @@ def main():
     warm_up()
 
     perf.reset()          # 清掉预热产生的样本
-    _REFUND_STORE.clear()
-
     bench_retrieval(n_retrieval)
     tool_counts = bench_agent(n_agent)
 

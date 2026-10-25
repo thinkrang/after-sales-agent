@@ -108,7 +108,11 @@ def test_all_knowledge_files_are_indexed():
 
     from rag import get_vector_store
 
-    files = {p.name for p in Path("knowledge").glob("*.txt")}
+    files = {
+        p.name
+        for suffix in ("*.txt", "*.md")
+        for p in Path("knowledge").glob(suffix)
+    }
     indexed = {
         (m or {}).get("source")
         for m in get_vector_store().get(include=["metadatas"])["metadatas"]

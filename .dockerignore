@@ -15,6 +15,7 @@ __pycache__/
 *.sqlite-shm
 vector_db/
 uploads/
+data/
 
 # 本地工具与文档
 .idea/

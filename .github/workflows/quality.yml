@@ -1,0 +1,46 @@
+name: quality
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install lightweight test dependencies
+        run: pip install "pytest==9.1.1" "fastapi==0.147.0" "pydantic==2.13.5" "httpx==0.28.1" "python-dotenv==1.2.3"
+      - name: Compile core modules
+        run: |
+          python -m py_compile \
+            auth.py orders.py tickets.py refund_service.py \
+            api.py rag.py tasks.py rebuild_index.py reconcile_refunds.py
+      - name: Test auth, refund workflow and ticket state machine
+        run: |
+          python -X utf8 -m pytest \
+            tests/test_refund_workflow.py \
+            tests/test_tickets.py \
+            tests/test_eval_dataset.py \
+            tests/test_auth.py::test_password_hash_round_trip \
+            tests/test_auth.py::test_access_token_round_trip_and_expiry \
+            tests/test_auth.py::test_tampered_token_is_rejected \
+            tests/test_auth.py::test_demo_login_is_tenant_bound \
+            -q -o addopts="" -k "not run_one"
+      - name: Check inline frontend JavaScript syntax
+        run: |
+          node -e '
+            const fs = require("fs");
+            for (const file of ["index.html", "knowledge.html"]) {
+              const html = fs.readFileSync(file, "utf8");
+              for (const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+                new Function(match[1]);
+              }
+            }
+            console.log("inline JavaScript syntax OK");
+          '

@@ -9,12 +9,12 @@
 
 状态机
 ------
-    pending_approval ──approve──> approved ──执行成功──> executed
-            │                        │
-            └──────reject──> rejected └──执行失败──> failed
+    pending_approval ──approve──> approved ──抢占──> executing ──成功──> executed
+            │                        │                     │
+            └──────reject──> rejected └────失败─────────────> failed
 
 业务规则用**部分唯一索引**表达：同一个订单可以有多次被拒绝的记录，
-但只能有一张 executed 的退款单。这比在代码里判重更可靠 ——
+但同一租户、同一用户只能有一张 executed 的退款单。这比在代码里判重更可靠 ——
 并发场景下代码判重有竞态，数据库约束没有。
 """
 
@@ -24,14 +24,15 @@ import db
 import threading
 import uuid
 from datetime import datetime
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "tickets.sqlite"
+from settings import DATA_DIR, ensure_data_dir
+
+DB_PATH = DATA_DIR / "tickets.sqlite"
 
 # 状态常量，避免各处硬编码字符串
 PENDING = "pending_approval"
 APPROVED = "approved"
+EXECUTING = "executing"
 EXECUTED = "executed"
 REJECTED = "rejected"
 FAILED = "failed"
@@ -39,7 +40,8 @@ FAILED = "failed"
 # 合法状态迁移。任何不在表里的迁移都会被拒绝。
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     PENDING: {APPROVED, REJECTED},
-    APPROVED: {EXECUTED, FAILED},
+    APPROVED: {EXECUTING, FAILED},
+    EXECUTING: {EXECUTED, FAILED},
     EXECUTED: set(),
     REJECTED: set(),
     FAILED: set(),
@@ -53,6 +55,7 @@ def _now() -> str:
 
 
 def init_tickets_table() -> None:
+    ensure_data_dir()
     # WAL 只需设一次，放初始化里——每次连接都设会在并发下冲突
     db.enable_wal(DB_PATH)
     db.hold(DB_PATH)      # 钉住 -wal/-shm，避免并发首写竞争
@@ -62,27 +65,78 @@ def init_tickets_table() -> None:
             CREATE TABLE IF NOT EXISTS refund_tickets (
                 id          TEXT PRIMARY KEY,
                 thread_id   TEXT NOT NULL,
+                tenant_id   TEXT NOT NULL DEFAULT 'public',
+                requester_id TEXT NOT NULL DEFAULT 'legacy',
                 order_id    TEXT NOT NULL,
+                amount_cents INTEGER NOT NULL DEFAULT 0,
                 reason      TEXT,
+                payload_hash TEXT NOT NULL DEFAULT '',
                 status      TEXT NOT NULL,
                 decision    TEXT,
+                decision_reason TEXT,
                 operator    TEXT,
+                approved_by TEXT,
+                approved_at TEXT,
                 refund_id   TEXT,
+                execution_id TEXT,
+                last_error  TEXT,
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
             )
             """
         )
+        # Existing local databases predate tenant ownership. Keep the migration
+        # idempotent so upgrades do not require deleting audit history.
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(refund_tickets)").fetchall()
+        }
+        additions = {
+            "tenant_id": "TEXT NOT NULL DEFAULT 'public'",
+            "requester_id": "TEXT NOT NULL DEFAULT 'legacy'",
+            "amount_cents": "INTEGER NOT NULL DEFAULT 0",
+            "payload_hash": "TEXT NOT NULL DEFAULT ''",
+            "decision_reason": "TEXT",
+            "approved_by": "TEXT",
+            "approved_at": "TEXT",
+            "execution_id": "TEXT",
+            "last_error": "TEXT",
+        }
+        for name, sql_type in additions.items():
+            if name not in columns:
+                conn.execute(
+                    f"ALTER TABLE refund_tickets ADD COLUMN {name} {sql_type}"
+                )
         # 业务规则：同一订单只能有一张「已执行」的退款单。
         # 用部分索引而不是唯一约束，是因为被拒绝的记录可以有多条。
+        # The first project version keyed executed refunds by order_id alone,
+        # which incorrectly coupled different tenants that happened to use the
+        # same external order number. Recreate the index under owner scope.
+        conn.execute("DROP INDEX IF EXISTS idx_ticket_executed_order")
         conn.execute(
             """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_executed_order
-            ON refund_tickets(order_id) WHERE status = 'executed'
+            CREATE UNIQUE INDEX idx_ticket_executed_order
+            ON refund_tickets(tenant_id, requester_id, order_id)
+            WHERE status = 'executed'
             """
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ticket_thread ON refund_tickets(thread_id)"
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_active_action
+            ON refund_tickets(
+                tenant_id, requester_id, thread_id, order_id, payload_hash
+            )
+            WHERE status IN ('pending_approval', 'approved', 'executing')
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_ticket_owner
+            ON refund_tickets(tenant_id, requester_id, created_at DESC)
+            """
         )
 
 
@@ -90,8 +144,20 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     return {k: row[k] for k in row.keys()}
 
 
-def _transition(conn: sqlite3.Connection, ticket_id: str, target: str, **fields) -> bool:
-    """执行一次状态迁移，非法迁移直接拒绝。"""
+def _transition(
+    conn: sqlite3.Connection,
+    ticket_id: str,
+    target: str,
+    *,
+    expected: str,
+    scope: dict | None = None,
+    **fields,
+) -> bool:
+    """Atomically move a ticket from ``expected`` to ``target``.
+
+    The UPDATE itself checks the source state. A read-then-write transition is
+    unsafe across processes even when the caller happens to hold a thread lock.
+    """
     row = conn.execute(
         "SELECT status FROM refund_tickets WHERE id = ?", (ticket_id,)
     ).fetchone()
@@ -100,23 +166,26 @@ def _transition(conn: sqlite3.Connection, ticket_id: str, target: str, **fields)
         return False
 
     current = row["status"]
-    if target not in ALLOWED_TRANSITIONS.get(current, set()):
+    if current != expected or target not in ALLOWED_TRANSITIONS.get(current, set()):
         return False
 
-    # 关键：status 本身也要写进去。
-    # 之前漏了这一项，导致函数返回 True 但状态没变 ——
-    # 这类 bug 最阴险的地方是「返回值正确」，只有查库才能发现。
     fields["status"] = target
     fields["updated_at"] = _now()
 
     assignments = ", ".join(f"{k} = ?" for k in fields)
-    params = list(fields.values()) + [ticket_id]
+    scope = scope or {}
+    scope_sql = "".join(f" AND {key} = ?" for key in scope)
+    params = list(fields.values()) + [ticket_id, expected] + list(scope.values())
 
-    conn.execute(
-        f"UPDATE refund_tickets SET {assignments} WHERE id = ?",
+    cursor = conn.execute(
+        f"""
+        UPDATE refund_tickets
+        SET {assignments}
+        WHERE id = ? AND status = ?{scope_sql}
+        """,
         params,
     )
-    return True
+    return cursor.rowcount == 1
 
 
 # ---------------------------------------------------------------- 对外接口
@@ -127,21 +196,93 @@ def create_ticket(
     order_id: str,
     reason: str = "",
     operator: str = "local-user",
+    *,
+    tenant_id: str = "public",
+    requester_id: str | None = None,
+    payload_hash: str = "",
+    amount_cents: int = 0,
 ) -> dict:
-    """在写操作被拦截时创建待审批工单。"""
+    """Create one active ticket for an exact action payload.
+
+    The partial unique index is the concurrency-safe deduplication layer. If a
+    caller retries after a crash, it receives the existing active ticket instead
+    of creating a second approval.
+    """
     ticket_id = uuid.uuid4().hex[:16]
     now = _now()
+    requester_id = requester_id or operator
 
     with _lock, db.session(DB_PATH) as conn:
-        conn.execute(
+        existing = conn.execute(
             """
-            INSERT INTO refund_tickets
-                (id, thread_id, order_id, reason, status, decision, operator,
-                 refund_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)
+            SELECT * FROM refund_tickets
+            WHERE tenant_id = ? AND requester_id = ? AND thread_id = ?
+              AND order_id = ? AND payload_hash = ?
+              AND status IN (?, ?, ?)
+            ORDER BY created_at DESC LIMIT 1
             """,
-            (ticket_id, thread_id, order_id, reason, PENDING, operator, now, now),
-        )
+            (
+                tenant_id,
+                requester_id,
+                thread_id,
+                order_id,
+                payload_hash,
+                PENDING,
+                APPROVED,
+                EXECUTING,
+            ),
+        ).fetchone()
+        if existing:
+            return _row_to_dict(existing)
+        try:
+            conn.execute(
+                """
+                INSERT INTO refund_tickets
+                    (id, thread_id, tenant_id, requester_id, order_id,
+                     amount_cents, reason, payload_hash, status, decision,
+                     operator, refund_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)
+                """,
+                (
+                    ticket_id,
+                    thread_id,
+                    tenant_id,
+                    requester_id,
+                    order_id,
+                    amount_cents,
+                    reason,
+                    payload_hash,
+                    PENDING,
+                    operator,
+                    now,
+                    now,
+                ),
+            )
+        except sqlite3.IntegrityError:
+            # A different process won the create race. Return its ticket so
+            # both callers show the same approval id.
+            raced = conn.execute(
+                """
+                SELECT * FROM refund_tickets
+                WHERE tenant_id = ? AND requester_id = ? AND thread_id = ?
+                  AND order_id = ? AND payload_hash = ?
+                  AND status IN (?, ?, ?)
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (
+                    tenant_id,
+                    requester_id,
+                    thread_id,
+                    order_id,
+                    payload_hash,
+                    PENDING,
+                    APPROVED,
+                    EXECUTING,
+                ),
+            ).fetchone()
+            if raced:
+                return _row_to_dict(raced)
+            raise
         row = conn.execute(
             "SELECT * FROM refund_tickets WHERE id = ?", (ticket_id,)
         ).fetchone()
@@ -149,98 +290,347 @@ def create_ticket(
     return _row_to_dict(row)
 
 
-def approve_ticket(ticket_id: str, operator: str = "local-user") -> bool:
+def approve_ticket(
+    ticket_id: str,
+    operator: str = "local-user",
+    *,
+    tenant_id: str | None = None,
+    requester_id: str | None = None,
+) -> bool:
     with _lock, db.session(DB_PATH) as conn:
+        scope = {}
+        if tenant_id is not None:
+            scope["tenant_id"] = tenant_id
+        if requester_id is not None:
+            scope["requester_id"] = requester_id
         return _transition(
-            conn, ticket_id, APPROVED, decision="approve", operator=operator
+            conn,
+            ticket_id,
+            APPROVED,
+            expected=PENDING,
+            scope=scope,
+            decision="approve",
+            operator=operator,
+            approved_by=operator,
+            approved_at=_now(),
         )
 
 
-def reject_ticket(ticket_id: str, reason: str = "", operator: str = "local-user") -> bool:
+def reject_ticket(
+    ticket_id: str,
+    reason: str = "",
+    operator: str = "local-user",
+    *,
+    tenant_id: str | None = None,
+    requester_id: str | None = None,
+) -> bool:
     with _lock, db.session(DB_PATH) as conn:
+        scope = {}
+        if tenant_id is not None:
+            scope["tenant_id"] = tenant_id
+        if requester_id is not None:
+            scope["requester_id"] = requester_id
         return _transition(
-            conn, ticket_id, REJECTED, decision="reject", operator=operator,
-            reason=reason or None,
+            conn,
+            ticket_id,
+            REJECTED,
+            expected=PENDING,
+            scope=scope,
+            decision="reject",
+            operator=operator,
+            approved_by=operator,
+            approved_at=_now(),
+            decision_reason=reason or None,
         )
 
 
-def mark_executed(order_id: str, refund_id: str) -> bool:
+def mark_executed(
+    ticket_id: str,
+    refund_id: str,
+    *,
+    execution_id: str | None = None,
+) -> bool:
     """工具真正执行成功后调用。
 
-    按 order_id 找最近一张 approved 的工单来标记，
-    因为工具函数拿不到 ticket_id（参数由模型生成，不能塞私有字段）。
+    ``ticket_id`` comes from the server-side approval record, never from model
+    arguments or the user request.
     """
     with _lock, db.session(DB_PATH) as conn:
-        row = conn.execute(
-            """
-            SELECT id FROM refund_tickets
-            WHERE order_id = ? AND status = ?
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (order_id, APPROVED),
-        ).fetchone()
-
-        if row is None:
-            return False
-        return _transition(conn, row["id"], EXECUTED, refund_id=refund_id)
+        return _transition(
+            conn,
+            ticket_id,
+            EXECUTED,
+            expected=EXECUTING,
+            refund_id=refund_id,
+            execution_id=execution_id,
+            last_error=None,
+        )
 
 
-def mark_failed(order_id: str, error: str = "") -> bool:
+def mark_failed(ticket_id: str, error: str = "") -> bool:
     with _lock, db.session(DB_PATH) as conn:
-        row = conn.execute(
+        cursor = conn.execute(
             """
-            SELECT id FROM refund_tickets
-            WHERE order_id = ? AND status = ?
-            ORDER BY created_at DESC LIMIT 1
+            UPDATE refund_tickets
+            SET status = ?, last_error = ?, updated_at = ?
+            WHERE id = ? AND status IN (?, ?)
             """,
-            (order_id, APPROVED),
-        ).fetchone()
-        if row is None:
-            return False
-        return _transition(conn, row["id"], FAILED, reason=error or None)
+            (
+                FAILED,
+                error or "退款执行失败",
+                _now(),
+                ticket_id,
+                APPROVED,
+                EXECUTING,
+            ),
+        )
+        return cursor.rowcount == 1
 
 
-def find_pending(thread_id: str) -> dict | None:
+def find_pending(
+    thread_id: str,
+    *,
+    tenant_id: str | None = None,
+    requester_id: str | None = None,
+) -> dict | None:
     """取该会话最近一张待审批工单。"""
+    clauses = ["thread_id = ?", "status = ?"]
+    params: list[str] = [thread_id, PENDING]
+    if tenant_id is not None:
+        clauses.append("tenant_id = ?")
+        params.append(tenant_id)
+    if requester_id is not None:
+        clauses.append("requester_id = ?")
+        params.append(requester_id)
     with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
-            """
+            f"""
             SELECT * FROM refund_tickets
-            WHERE thread_id = ? AND status = ?
+            WHERE {' AND '.join(clauses)}
             ORDER BY created_at DESC LIMIT 1
             """,
-            (thread_id, PENDING),
+            params,
         ).fetchone()
     return _row_to_dict(row) if row else None
 
 
-def has_executed(order_id: str) -> bool:
+def has_executed(
+    order_id: str,
+    *,
+    tenant_id: str | None = None,
+    requester_id: str | None = None,
+) -> bool:
     """订单是否已有执行成功的退款单 —— 幂等的最终依据。"""
-    return find_executed(order_id) is not None
+    return (
+        find_executed(
+            order_id, tenant_id=tenant_id, requester_id=requester_id
+        )
+        is not None
+    )
 
 
-def find_executed(order_id: str) -> dict | None:
+def find_executed(
+    order_id: str,
+    *,
+    tenant_id: str | None = None,
+    requester_id: str | None = None,
+) -> dict | None:
     """取该订单执行成功的那张退款单。"""
+    clauses = ["order_id = ?", "status = ?"]
+    params: list[str] = [order_id, EXECUTED]
+    if tenant_id is not None:
+        clauses.append("tenant_id = ?")
+        params.append(tenant_id)
+    if requester_id is not None:
+        clauses.append("requester_id = ?")
+        params.append(requester_id)
     with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT * FROM refund_tickets WHERE order_id = ? AND status = ? LIMIT 1",
-            (order_id, EXECUTED),
+            f"""
+            SELECT * FROM refund_tickets
+            WHERE {' AND '.join(clauses)}
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            params,
         ).fetchone()
     return _row_to_dict(row) if row else None
 
 
-def list_tickets(limit: int = 50) -> list[dict]:
+def list_tickets(
+    limit: int = 50,
+    *,
+    tenant_id: str | None = None,
+    requester_id: str | None = None,
+) -> list[dict]:
+    clauses = []
+    params: list[str | int] = []
+    if tenant_id is not None:
+        clauses.append("tenant_id = ?")
+        params.append(tenant_id)
+    if requester_id is not None:
+        clauses.append("requester_id = ?")
+        params.append(requester_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(limit)
     with _lock, db.session(DB_PATH) as conn:
         rows = conn.execute(
-            "SELECT * FROM refund_tickets ORDER BY created_at DESC LIMIT ?",
-            (limit,),
+            f"""
+            SELECT * FROM refund_tickets
+            {where}
+            ORDER BY created_at DESC LIMIT ?
+            """,
+            params,
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
-def get_ticket(ticket_id: str) -> dict | None:
+def get_ticket(
+    ticket_id: str,
+    *,
+    tenant_id: str | None = None,
+    requester_id: str | None = None,
+) -> dict | None:
+    clauses = ["id = ?"]
+    params: list[str] = [ticket_id]
+    if tenant_id is not None:
+        clauses.append("tenant_id = ?")
+        params.append(tenant_id)
+    if requester_id is not None:
+        clauses.append("requester_id = ?")
+        params.append(requester_id)
     with _lock, db.session(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT * FROM refund_tickets WHERE id = ?", (ticket_id,)
+            f"SELECT * FROM refund_tickets WHERE {' AND '.join(clauses)}",
+            params,
         ).fetchone()
     return _row_to_dict(row) if row else None
+
+
+def find_pending_for_action(
+    thread_id: str,
+    *,
+    tenant_id: str,
+    requester_id: str,
+    order_id: str,
+    payload_hash: str,
+) -> dict | None:
+    with _lock, db.session(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM refund_tickets
+            WHERE thread_id = ? AND tenant_id = ? AND requester_id = ?
+              AND order_id = ? AND payload_hash = ?
+              AND status IN (?, ?, ?)
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (
+                thread_id,
+                tenant_id,
+                requester_id,
+                order_id,
+                payload_hash,
+                PENDING,
+                APPROVED,
+                EXECUTING,
+            ),
+        ).fetchone()
+    return _row_to_dict(row) if row else None
+
+
+def find_action_ticket(
+    thread_id: str,
+    *,
+    tenant_id: str,
+    requester_id: str,
+    order_id: str,
+    payload_hash: str,
+) -> dict | None:
+    """Find the newest ticket for an exact action, including terminal states."""
+    with _lock, db.session(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM refund_tickets
+            WHERE thread_id = ? AND tenant_id = ? AND requester_id = ?
+              AND order_id = ? AND payload_hash = ?
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (
+                thread_id,
+                tenant_id,
+                requester_id,
+                order_id,
+                payload_hash,
+            ),
+        ).fetchone()
+    return _row_to_dict(row) if row else None
+
+
+def acquire_execution(
+    thread_id: str,
+    *,
+    tenant_id: str,
+    requester_id: str,
+    order_id: str,
+    payload_hash: str,
+) -> dict | None:
+    """Claim an approved action, or return an in-flight/completed retry.
+
+    Only one process can move ``approved`` to ``executing`` because the
+    transition is a conditional UPDATE checked by rowcount.
+    """
+    with _lock, db.session(DB_PATH) as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM refund_tickets
+            WHERE thread_id = ? AND tenant_id = ? AND requester_id = ?
+              AND order_id = ? AND payload_hash = ?
+              AND status IN (?, ?, ?)
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (
+                thread_id,
+                tenant_id,
+                requester_id,
+                order_id,
+                payload_hash,
+                APPROVED,
+                EXECUTING,
+                EXECUTED,
+            ),
+        ).fetchone()
+        if row is None:
+            return None
+        ticket = _row_to_dict(row)
+        if ticket["status"] == APPROVED:
+            changed = _transition(
+                conn,
+                ticket["id"],
+                EXECUTING,
+                expected=APPROVED,
+                scope={
+                    "tenant_id": tenant_id,
+                    "requester_id": requester_id,
+                },
+            )
+            if not changed:
+                return None
+            refreshed = conn.execute(
+                "SELECT * FROM refund_tickets WHERE id = ?", (ticket["id"],)
+            ).fetchone()
+            return _row_to_dict(refreshed)
+        return ticket
+
+
+def list_recoverable(limit: int = 100) -> list[dict]:
+    """Approved/executing tickets that can be safely reconciled."""
+    with _lock, db.session(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM refund_tickets
+            WHERE status IN (?, ?)
+            ORDER BY updated_at ASC
+            LIMIT ?
+            """,
+            (APPROVED, EXECUTING, limit),
+        ).fetchall()
+    return [_row_to_dict(row) for row in rows]

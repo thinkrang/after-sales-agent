@@ -10,7 +10,7 @@
 
 三个设计要点
 ------------
-1. **幂等**：doc_id = sha256(文件内容)。同一文件重复上传，
+1. **幂等**：doc_id = sha256(tenant + 文件内容)。同一租户内重复上传
    `add_knowledge_document` 内部会识别 duplicate；任务重试同理，
    重试不会产生第二份索引。这是"至少一次投递"下的必要保护。
 
@@ -45,7 +45,13 @@ BROKER_CHECK_TTL = 10.0
 
 
 @celery_app.task(bind=True, name="knowledge.index_document", max_retries=3)
-def index_document(self, filename: str, content_b64: str, doc_id: str) -> dict:
+def index_document(
+    self,
+    filename: str,
+    content_b64: str,
+    doc_id: str,
+    tenant: str = "public",
+) -> dict:
     """解析文档并写入向量库。
 
     参数里传 base64 而不是 bytes：Celery 用 JSON 序列化，
@@ -56,7 +62,11 @@ def index_document(self, filename: str, content_b64: str, doc_id: str) -> dict:
     self.update_state(state="PROGRESS", meta={"stage": "解析并写入向量库"})
 
     try:
-        result = add_knowledge_document(filename=filename, file_bytes=raw)
+        result = add_knowledge_document(
+            filename=filename,
+            file_bytes=raw,
+            tenant=tenant,
+        )
     except ValueError:
         # 文件格式/编码问题，重试无意义
         raise
@@ -98,9 +108,18 @@ def _broker_available() -> bool:
 # ---------------------------------------------------------------- 派发与查询
 
 
-def _run_inline(task_id: str, filename: str, content: bytes) -> None:
+def _run_inline(
+    task_id: str,
+    filename: str,
+    content: bytes,
+    tenant: str,
+) -> None:
     try:
-        result = add_knowledge_document(filename=filename, file_bytes=content)
+        result = add_knowledge_document(
+            filename=filename,
+            file_bytes=content,
+            tenant=tenant,
+        )
         refresh_corpus()
         with _local_lock:
             _LOCAL_TASKS[task_id] = {"status": "SUCCESS", "result": result}
@@ -110,13 +129,20 @@ def _run_inline(task_id: str, filename: str, content: bytes) -> None:
             _LOCAL_TASKS[task_id] = {"status": "FAILURE", "error": str(exc)}
 
 
-def submit_index_task(filename: str, content: bytes, doc_id: str) -> tuple[str, str]:
+def submit_index_task(
+    filename: str,
+    content: bytes,
+    doc_id: str,
+    tenant: str,
+) -> tuple[str, str]:
     """派发索引任务，返回 (task_id, mode)。mode 为 celery 或 inline。"""
     payload = base64.b64encode(content).decode("ascii")
 
     if _broker_available():
         try:
-            async_result = index_document.delay(filename, payload, doc_id)
+            async_result = index_document.delay(
+                filename, payload, doc_id, tenant
+            )
             return async_result.id, "celery"
         except Exception as exc:
             logging.warning("派发 Celery 任务失败，降级为进程内执行：%s", exc)
@@ -127,7 +153,7 @@ def submit_index_task(filename: str, content: bytes, doc_id: str) -> tuple[str, 
 
     threading.Thread(
         target=_run_inline,
-        args=(task_id, filename, content),
+        args=(task_id, filename, content, tenant),
         daemon=True,
     ).start()
 
