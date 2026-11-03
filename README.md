@@ -764,6 +764,9 @@ task_scenarios.py       12 个合成多轮业务任务（dev/holdout 分开）
 task_eval.py            分层报告、重复运行、场景指纹、配对对照
 task_eval_model.py      真模型任务回放与业务终态验收
 reconcile_refunds.py    对账批处理：恢复已批准/执行中的退款工单
+prune_checkpoints.py    会话历史清理：按空闲天数删 checkpoint（默认预览，--apply 才写库）
+agent_context.py        逐轮循环边界、请求时压缩、任务快照注入
+long_memory.py          类型化偏好（可过期/删除）与只读售后历史
 rag.py                  索引构建、文档增删、检索、证据格式化、多租户过滤
 retrieval.py            四种检索策略（vector / bm25 / hybrid / rerank）
                         唯一检索入口：线上 agent 和评测脚本都走 retrieve()
