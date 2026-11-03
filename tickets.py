@@ -150,6 +150,8 @@ def init_tickets_table() -> None:
         _ensure_columns(conn)
         from refund_tasks import init_schema
         init_schema(conn)
+        from long_memory import init_schema as init_memory_schema
+        init_memory_schema(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ticket_thread ON refund_tickets(thread_id)"
         )

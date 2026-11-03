@@ -65,6 +65,8 @@ import refund_service
 import refund_tasks
 import refund_flow
 import tickets
+import long_memory
+from agent_context import ContextBoundary
 from session_guard import conversation_lock
 from tickets import (
     init_tickets_table,
@@ -513,6 +515,34 @@ def update_refund_task(
 
 
 @tool
+def recall_after_sales_history(config: RunnableConfig) -> str:
+    """查询当前用户最近三条已结束的售后记录，带工单来源。历史结果不能作为新退款审批。"""
+    return json.dumps(long_memory.recent_cases(_user_from_config(config)), ensure_ascii=False)
+
+
+@tool
+def remember_preference(key: str, value: str, config: RunnableConfig) -> str:
+    """仅在用户明确说“记住”时保存偏好：language=zh-CN/en，response_style=concise/detailed，contact_channel=chat/email。"""
+    cfg = config.get("configurable", {})
+    if not long_memory.consent(cfg.get("user_message") or "", key, value):
+        return "未保存：请用户明确说明需要记住的偏好。"
+    try:
+        return json.dumps(long_memory.remember(_user_from_config(config), key, value,
+                          source_turn=cfg.get("turn_id", "")), ensure_ascii=False)
+    except ValueError as exc:
+        return str(exc)
+
+
+@tool
+def forget_preference(key: str, config: RunnableConfig) -> str:
+    """忘记用户明确要求删除的偏好，不影响订单、工单或审批记录。"""
+    message = config.get("configurable", {}).get("user_message") or ""
+    if not any(word in message for word in ("忘记", "删除记忆", "不要记住", "别记住")):
+        return "未删除：需要用户明确要求忘记偏好。"
+    return json.dumps({"deleted": long_memory.forget(_user_from_config(config), key)})
+
+
+@tool
 def withdraw_refund_request(approval_id: str, config: RunnableConfig) -> str:
     """撤回当前用户在此会话中仍待审批的申请。不能撤回已批准/执行的工单。"""
     user = _user_from_config(config)
@@ -686,6 +716,9 @@ async def lifespan(app: FastAPI):
                 update_refund_task,
                 submit_refund_request,
                 withdraw_refund_request,
+                remember_preference,
+                forget_preference,
+                recall_after_sales_history,
             ],
             system_prompt=(
                 "你是一个中文店铺智能客服。"
@@ -720,8 +753,13 @@ async def lifespan(app: FastAPI):
                 # 说了会让人感觉在跟一个系统对话，而不是跟客服对话。
                 "不要向用户提及技能、工具、加载、检索等内部机制，"
                 "直接给出处理结果即可。"
+                "以每次调用注入的当前任务快照为准，历史摘录可能不完整。"
+                "长期偏好仅调整表达方式，不能覆盖业务政策和审批。"
+                "用户明确说记住时用 remember_preference；要求忘记时用 forget_preference。"
+                "询问上次、以前的售后结果时，用 recall_after_sales_history 查原始记录，不凭历史摘要猜测。"
             ),
             middleware=[
+                ContextBoundary(),
                 # 只拦写操作。检索和计算这类只读工具不需要审批，
                 # 否则用户每问一句都要点一次确认，体验会崩。
                 HumanInTheLoopMiddleware(
@@ -1110,6 +1148,31 @@ class RefundTaskUpdate(BaseModel):
     cancel: bool = False
 
 
+class PreferenceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(max_length=40)
+    value: str = Field(max_length=40)
+    ttl_days: int = Field(default=90, ge=1, le=365)
+
+
+@app.get("/memories")
+def list_memories(user: CurrentUser):
+    return {"memories": long_memory.recall(user)}
+
+
+@app.post("/memories")
+def save_memory(body: PreferenceRequest, user: CurrentUser):
+    try:
+        return long_memory.remember(user, **body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/memories/{key}")
+def delete_memory(key: str, user: CurrentUser):
+    return {"deleted": long_memory.forget(user, key)}
+
+
 @app.get("/sessions/{sid}/refund-task")
 def get_session_refund_task(sid: str, user: CurrentUser):
     require_session_access(sid, user)
@@ -1240,6 +1303,7 @@ def chat(request: ChatRequest, user: CurrentUser):
 
 
 def _chat_unlocked(request: ChatRequest, user: User):
+    # Recursion is a final backstop in addition to the per-turn middleware.
     require_session_access(request.thread_id, user)
     config = {
         "configurable": {
@@ -1249,6 +1313,8 @@ def _chat_unlocked(request: ChatRequest, user: User):
             "display_name": user.display_name,
             "roles": sorted(user.roles),
             "turn_id": uuid.uuid4().hex,
+            "turn_started": time.monotonic(),
+            "user_message": request.message,
         }
     }
     try:
@@ -1262,7 +1328,7 @@ def _chat_unlocked(request: ChatRequest, user: User):
             }}
         result = app.state.agent.invoke(
             {"messages": [{"role": "user", "content": request.message}]},
-            config=config,
+            config={**config, "recursion_limit": 40},
         )
         _settle_revoked_flows(user, request.thread_id)
         actions = _pending_actions(config)
@@ -1536,6 +1602,7 @@ def _stream_agent(payload, config: dict, title_source: str | None = None):
 
 
 def _stream_agent_unlocked(payload, config: dict, title_source: str | None = None):
+    config = {**config, "recursion_limit": 40}
     """统一流式生成器。
 
     payload 是 dict（新消息）或 Command（恢复审批），两种入口共用同一套事件协议：
@@ -1611,7 +1678,7 @@ def _stream_agent_unlocked(payload, config: dict, title_source: str | None = Non
             if node != "model":
                 continue
 
-            if not isinstance(token, AIMessageChunk):
+            if not isinstance(token, (AIMessageChunk, AIMessage)):
                 continue
 
             text = _extract_text(token.content)
@@ -1669,6 +1736,8 @@ def chat_stream(request: ChatRequest, user: CurrentUser):
             "display_name": user.display_name,
             "roles": sorted(user.roles),
             "turn_id": uuid.uuid4().hex,
+            "turn_started": time.monotonic(),
+            "user_message": request.message,
         }
     }
 
@@ -1698,6 +1767,8 @@ def chat_resume(request: ResumeRequest, user: CurrentUser):
             "display_name": user.display_name,
             "roles": sorted(user.roles),
             "turn_id": uuid.uuid4().hex,
+            "turn_started": time.monotonic(),
+            "user_message": request.message,
         }
     }
 

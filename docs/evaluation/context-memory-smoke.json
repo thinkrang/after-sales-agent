@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-03",
+  "model": "deepseek-chat",
+  "business_smoke": {
+    "total": 3,
+    "passed": 3,
+    "failure_stages": {},
+    "provenance": {
+      "commit": "25ca79e9e98714c55d3fef176c0eb3a8a6d9eee3",
+      "dirty": true,
+      "source_sha256": "b8d4ab768a1e075b393ea000777bb9a7d8f88de929deb8eb11a928be5e35af64"
+    }
+  },
+  "business_cases": [
+    {
+      "case": "slot_fill",
+      "passed": true
+    },
+    {
+      "case": "side_question",
+      "passed": true
+    },
+    {
+      "case": "cancel",
+      "passed": true
+    }
+  ],
+  "long_memory_live": {
+    "passed": true,
+    "model": "deepseek-chat",
+    "checks": [
+      "explicit_save",
+      "cross_session_recall",
+      "explicit_forget"
+    ]
+  },
+  "limits": "仅为少量真实模型冒烟，不代表生产准确率；未重新运行旧版全部对照实验。",
+  "unit_and_integration": {
+    "passed": 234,
+    "skipped": 1,
+    "deselected": 2,
+    "knowledge_index": "isolated copy"
+  }
+}

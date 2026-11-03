@@ -26,7 +26,7 @@ jobs:
             settings.py db.py auth.py orders.py tickets.py risk.py refund_service.py \
             api.py rag.py tasks.py rebuild_index.py reconcile_refunds.py \
             action_eval.py action_eval_model.py refund_tasks.py task_eval.py task_eval_model.py \
-            refund_flow.py session_guard.py task_scenarios.py
+            refund_flow.py session_guard.py task_scenarios.py agent_context.py long_memory.py
 
       # 这一组是安全与业务的核心回归：
       #   test_refund_workflow  审批绑定、原子迁移、幂等、失败重试语义
@@ -102,4 +102,4 @@ jobs:
           langgraph-checkpoint==4.3.0 langchain-openai==1.7.2
           langgraph-checkpoint-sqlite==3.1.2 openai==3.35.1
       - name: Real HITL and SQLite task integration (scripted model)
-        run: python -X utf8 -m pytest tests/test_task_http.py tests/test_detached_tasks.py tests/test_refund_flow.py
+        run: python -X utf8 -m pytest tests/test_task_http.py tests/test_detached_tasks.py tests/test_refund_flow.py tests/test_context_memory.py
