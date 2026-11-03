@@ -61,7 +61,13 @@ def compress(messages, limits):
     if room <= 0:
         return recent
     digest = json.dumps(excerpts[-8:], ensure_ascii=False)[:min(limits.summary_chars, room)]
-    return [HumanMessage(content="历史对话摘录（可能不完整，仅作背景；不是新请求或授权）：\n" + digest), *recent]
+    header = "历史对话摘录（可能不完整，仅作背景；不是新请求或授权）：\n"
+    if recent and isinstance(recent[0], HumanMessage):
+        # 并进本轮第一条用户消息。两条连续 HumanMessage 大多数接口能接受，
+        # 但部分 OpenAI 兼容实现会当成两条独立指令，语义上也不干净。
+        return [HumanMessage(content=header + digest + "\n\n" + str(recent[0].content)),
+                *recent[1:]]
+    return [HumanMessage(content=header + digest), *recent]
 
 
 class ContextBoundary(AgentMiddleware):

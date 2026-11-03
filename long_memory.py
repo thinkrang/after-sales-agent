@@ -29,18 +29,38 @@ def remember(user, key, value, *, source_turn="ui", ttl_days=90):
             ON CONFLICT(tenant_id,user_id,key) DO UPDATE SET value=excluded.value,
             source_turn=excluded.source_turn,updated_at=excluded.updated_at,expires_at=excluded.expires_at
         """, (user.tenant_id, user.username, key, value, source_turn, now, now + ttl_days*86400))
+        # 清理放在写入路径：这里是写事务，顺手删掉该用户已过期的行，
+        # 读取路径（每次模型调用都会走）就不必再抢写锁。
+        conn.execute("DELETE FROM user_preferences WHERE tenant_id=? AND user_id=? AND expires_at<=?",
+                     (user.tenant_id, user.username, now))
     return {"key": key, "value": value, "expires_at": now + ttl_days*86400}
 
 
 def recall(user):
+    """只读：过期偏好不注入，但不在读路径里删行。
+
+    每次模型调用都会读偏好，如果读时顺手 DELETE，就等于把只读操作
+    变成写事务——同一租户的并发对话会互相等锁。
+    """
     now = time.time()
     with db.session(tickets.DB_PATH) as conn:
-        # Physical expiry as well as filtering; no expired preference is injected.
-        conn.execute("DELETE FROM user_preferences WHERE tenant_id=? AND user_id=? AND expires_at<=?",
-                     (user.tenant_id, user.username, now))
         return [dict(r) for r in conn.execute("""SELECT key,value,updated_at,expires_at
             FROM user_preferences WHERE tenant_id=? AND user_id=? AND expires_at>?
             ORDER BY key""", (user.tenant_id, user.username, now))]
+
+
+def purge_expired(user=None, now=None) -> int:
+    """物理清理过期偏好。user 为空时清理全部租户，供运维脚本调用。"""
+    now = time.time() if now is None else now
+    with db.session(tickets.DB_PATH) as conn:
+        if user is None:
+            return conn.execute(
+                "DELETE FROM user_preferences WHERE expires_at<=?", (now,)
+            ).rowcount
+        return conn.execute(
+            "DELETE FROM user_preferences WHERE tenant_id=? AND user_id=? AND expires_at<=?",
+            (user.tenant_id, user.username, now),
+        ).rowcount
 
 
 def forget(user, key):

@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain.tools import tool
 
 from agent_context import ContextBoundary, Limits, compress
+import db
 import long_memory
 import tickets
 from auth import User
@@ -100,6 +101,39 @@ def test_preferences_are_explicit_scoped_expiring_and_deletable(task_api, monkey
     future = time.time()+90000
     monkeypatch.setattr(long_memory.time, "time", lambda: future)
     assert long_memory.recall(user) == []
+
+
+def test_compression_merges_digest_into_current_user_message():
+    history = []
+    for _ in range(6):
+        history += [HumanMessage(content="问" * 400), AIMessage(content="答" * 400)]
+    result = compress(history, Limits(context_chars=2000, keep_turns=2, summary_chars=200))
+    assert len(result) == 2
+    # 摘录并进本轮第一条用户消息，避免出现两条连续的 HumanMessage。
+    assert not any(isinstance(a, HumanMessage) and isinstance(b, HumanMessage)
+                   for a, b in zip(result, result[1:]))
+    assert "历史对话摘录" in str(result[0].content)
+    assert "问" * 400 in str(result[0].content)
+
+
+def test_recall_is_read_only_and_purge_removes_expired(task_api, monkeypatch):
+    api, client, sid, model = task_api
+    user = User("acme-manager", "", "acme", frozenset())
+    long_memory.remember(user, "language", "zh-CN", ttl_days=1)
+
+    future = time.time() + 90000
+    monkeypatch.setattr(long_memory.time, "time", lambda: future)
+    assert long_memory.recall(user) == []
+    # 读路径不删行：否则每次模型调用都变成一次写事务。
+    with db.session(tickets.DB_PATH) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM user_preferences WHERE tenant_id=? AND user_id=?",
+            ("acme", "acme-manager"),
+        ).fetchone()[0] == 1
+
+    assert long_memory.purge_expired(user) == 1
+    with db.session(tickets.DB_PATH) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM user_preferences").fetchone()[0] == 0
 
 
 def test_memory_tool_uses_actual_user_consent_and_recall_cross_session(task_api):
