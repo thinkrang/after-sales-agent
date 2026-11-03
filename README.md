@@ -35,6 +35,25 @@
 
 ---
 
+## 设计取舍（先读这一节）
+
+这个项目最容易讲错的一句话是"它是一个自主 agent"。**它不是**：
+对话侧是 agent（模型决定调哪个工具、调几次、何时追问），动作侧是确定性状态机
+（审批与执行只认数据库状态）。这个划分本身就是设计决策。
+
+四个边界，每个都写清了"放弃了什么"：
+
+| 问题 | 做法 | 放弃了 |
+|---|---|---|
+| 循环怎么停 | 中间件逐轮预算 + 40 步图级兜底 + 可读停止说明 | 让模型自己意识到该停 |
+| 上下文放什么 | 请求时抽取式压缩，任务事实每轮从数据库重载 | 语义摘要（多一次调用且可能编造） |
+| 记忆归谁 | 任务状态 / 类型化偏好 / 只读售后历史，按 tenant+user 隔离 | 自动记住一切 |
+| 工具失败 | 结构化 `code` + `retryable` + `hint` | 返回一句中文让模型自己体会 |
+
+完整说明与 5 组高频追问的速答见 [设计取舍与面试问答](docs/design-tradeoffs.md)。
+
+---
+
 ## 核心能力
 
 **新增：Loop / 上下文 / 长期记忆**
@@ -43,6 +62,9 @@
 长对话按完整轮次生成抽取式摘录，原始 checkpoint 保留；当前任务状态每次从数据库重新加载。
 长期记忆支持明确保存的类型化偏好（可查看、删除、过期）和带来源的历史售后查询，
 不携带新的审批权限。机制、默认边界与限制见 [上下文与记忆说明](docs/context-memory.md)。
+
+订单查询工具返回结构化失败信封（`code` / `retryable` / `hint`）：
+`not_found` 不重试、应核对订单号，`transient` 可重试一次；工具异常不再中断整轮对话。
 
 **新增：持久化退款任务与任务终态评测**
 
@@ -205,15 +227,31 @@ docker build \
 ### 本地运行
 
 ```bash
+# 1. 建独立环境（二选一，别装到系统 Python 里）
+python -m venv .venv
+.venv\Scripts\activate           # Windows
+# source .venv/bin/activate      # macOS / Linux
+# 或者：conda create -n shop-agent python=3.12 && conda activate shop-agent
+
+# 2. 装依赖。torch 先单独装 CPU 版，否则 sentence-transformers 会拉 2.5GB CUDA 包
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 
+# 3. 环境自检：不依赖模型和检索栈，几秒内应全绿
+python -m pytest tests/test_tool_result.py -q
+
+# 4. 配置密钥
 cp .env.example .env
 # 填写 DEEPSEEK_API_KEY 和 AUTH_SECRET
 
-python rebuild_index.py          # 首次运行
+# 5. 首次建索引，然后启动
+python rebuild_index.py
 uvicorn api:app --port 8000
 ```
+
+> 仓库里不含 `.venv`（已在 `.gitignore`）。如果克隆后发现 `.venv` 是空目录，
+> 说明环境没建起来，按上面第 1、2 步重做；`pip install` 报缺 `python-multipart`
+> 之类，通常是跳过了 `-r requirements.txt`。
 
 **可选：启动 Celery worker（需要 Redis）**
 
