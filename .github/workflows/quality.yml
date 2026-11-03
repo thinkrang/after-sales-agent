@@ -26,7 +26,8 @@ jobs:
             settings.py db.py auth.py orders.py tickets.py risk.py refund_service.py \
             api.py rag.py tasks.py rebuild_index.py reconcile_refunds.py \
             action_eval.py action_eval_model.py refund_tasks.py task_eval.py task_eval_model.py \
-            refund_flow.py session_guard.py task_scenarios.py agent_context.py long_memory.py
+            refund_flow.py session_guard.py task_scenarios.py agent_context.py long_memory.py \
+            tool_result.py
 
       # 这一组是安全与业务的核心回归：
       #   test_refund_workflow  审批绑定、原子迁移、幂等、失败重试语义
@@ -51,6 +52,7 @@ jobs:
             tests/test_risk.py \
             tests/test_action_safety.py \
             tests/test_single_retrieval_path.py \
+            tests/test_tool_result.py \
             tests/test_eval_dataset.py \
             tests/test_auth.py::test_password_hash_round_trip \
             tests/test_auth.py::test_access_token_round_trip_and_expiry \

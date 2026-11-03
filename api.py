@@ -34,6 +34,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_core.runnables import RunnableConfig
+from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,6 +67,7 @@ import refund_tasks
 import refund_flow
 import tickets
 import long_memory
+import tool_result
 from agent_context import ContextBoundary
 from session_guard import conversation_lock
 from tickets import (
@@ -380,13 +382,19 @@ def search_shop_info(question: str, config: RunnableConfig) -> str:
     # 后者只做纯向量 top_k，是评测里被证明会漏召的那条路径
     # （「商品编号001」会被相似 SKU 挤掉）。现在两条路径合并成一条，
     # 策略和权重由 retrieval.py 统一决定，评测结论才对得上线上行为。
-    with perf.stage("rag.retrieval"):
-        results = retrieval.retrieve(
-            question, top_k=3, strategy=retrieval.DEFAULT_STRATEGY, tenant=tenant
-        )
+    try:
+        with perf.stage("rag.retrieval"):
+            results = retrieval.retrieve(
+                question, top_k=3, strategy=retrieval.DEFAULT_STRATEGY, tenant=tenant
+            )
 
-    with perf.stage("rag.evidence_check"):
-        verdict = verify_evidence(question, results)
+        with perf.stage("rag.evidence_check"):
+            verdict = verify_evidence(question, results)
+    except Exception:  # noqa: BLE001
+        # 检索链路故障（索引缺失、下游超时）与"知识库没写"是两回事，
+        # 不能都回一句"没有证据"，否则模型会把可恢复故障讲成业务结论。
+        logging.warning("知识库检索失败 question=%s", question, exc_info=True)
+        return tool_result.retrieval_failure()
 
     print(f"[Evidence Verification] {verdict}")
 
@@ -410,12 +418,7 @@ def search_shop_info(question: str, config: RunnableConfig) -> str:
     # 4. 核查不通过或输出异常：采取保守策略
     print("[RAG] 未取得足够证据，拒绝提供检索内容")
 
-    return (
-        "知识库没有提供足以回答这个问题的可靠证据。"
-        "请明确告诉用户目前无法依据知识库确认，"
-        "不要自行补充未经证实的业务信息。\n"
-        f"核查说明：{reason if separator else '核查结果无效'}"
-    )
+    return tool_result.no_evidence(reason if separator else "核查结果无效")
 
 @tool
 def calculate_total(price: float, quantity: int) -> str:
@@ -461,25 +464,20 @@ def load_skill(name: str) -> str:
 
 @tool
 def get_order_info(order_id: str, config: RunnableConfig) -> str:
-    """查询当前登录用户自己的订单及退款资格，不执行任何写操作。"""
+    """查询当前登录用户自己的订单及退款资格，不执行任何写操作。
+
+    返回 JSON 信封：ok=true 时含订单字段；ok=false 时看 code——
+    not_found 表示确定没有，应向用户核对订单号而不是重试；
+    transient 表示服务暂时不可用，可以重试一次。
+    """
     try:
         user = _user_from_config(config)
         order = orders.get_order(user, order_id)
-        decision = orders.refund_policy(order)
-        amount = order["amount_cents"] / 100
-        return json.dumps(
-            {
-                "order_id": order["order_id"],
-                "product_name": order["product_name"],
-                "amount": f"{amount:.2f}",
-                "status": order["status"],
-                "refundable": decision["eligible"],
-                "reason": decision["reason"],
-            },
-            ensure_ascii=False,
-        )
-    except orders.OrderNotFound as exc:
-        return f"订单查询失败：{exc}"
+        return tool_result.order_snapshot(order, orders.refund_policy(order))
+    except Exception as exc:  # noqa: BLE001
+        # 工具异常不能炸掉整轮对话：翻译成失败码交给模型决定下一步。
+        logging.warning("订单查询失败 order=%s", order_id, exc_info=True)
+        return tool_result.order_lookup_failure(exc)
 
 
 @tool
@@ -1296,6 +1294,13 @@ def delete_document(doc_id: str, user: CurrentUser):
 # ---------------------------------------------------------------- 聊天接口
 
 
+# 递归上限的统一文案：只描述"停下来了"和下一步，不暗示操作被撤销。
+_RECURSION_MESSAGE = (
+    "这个问题我处理了很多轮仍没有得出可靠结论，先停在这里。"
+    "已经完成的操作以工单记录为准，你可以补充更具体的信息后继续，或让我转人工处理。"
+)
+
+
 @app.post("/chat")
 def chat(request: ChatRequest, user: CurrentUser):
     with conversation_lock("dialogue:" + request.thread_id):
@@ -1345,6 +1350,12 @@ def _chat_unlocked(request: ChatRequest, user: User):
         touch_session(request.thread_id, request.message, user=user)
         answer = _extract_text(result["messages"][-1].content)
         return {"thread_id": request.thread_id, "answer": answer}
+    except GraphRecursionError:
+        # 中间件通常先在 10 次模型调用处停下；这里是 40 步递归的最终兜底。
+        # 两者都必须给出可读出口，不能让用户看到"Agent 调用失败"。
+        logging.warning("Agent 达到递归上限 thread=%s", request.thread_id)
+        touch_session(request.thread_id, request.message, user=user)
+        return {"thread_id": request.thread_id, "answer": _RECURSION_MESSAGE}
     except Exception as e:
         logging.exception("Agent 执行失败")
         raise HTTPException(status_code=502, detail="Agent 调用失败，请查看服务端日志。") from e
@@ -1566,7 +1577,11 @@ def _resume_requester_thread(ticket: dict, decision: str, message: str | None = 
     payload = {"type": decision}
     if message:
         payload["message"] = message
-    app.state.agent.invoke(Command(resume={"decisions": [payload]}), config=config)
+    # 恢复同样是一次图执行，必须有上限：审批后的工具重放也可能循环。
+    app.state.agent.invoke(
+        Command(resume={"decisions": [payload]}),
+        config={**config, "recursion_limit": 40},
+    )
 
 
 
@@ -1591,7 +1606,7 @@ def _recover_changed_task(config: dict, pending: list[dict]) -> list[dict]:
         app.state.agent.invoke(Command(resume={"decisions": [
             {"type": "reject", "message": "任务已修改或撤回，请重新读取退款任务，不要重提旧动作"}
             for _ in pending
-        ]}), config=config)
+        ]}), config={**config, "recursion_limit": 40})
         return _pending_actions(config)
     return pending
 
@@ -1602,12 +1617,12 @@ def _stream_agent(payload, config: dict, title_source: str | None = None):
 
 
 def _stream_agent_unlocked(payload, config: dict, title_source: str | None = None):
-    config = {**config, "recursion_limit": 40}
     """统一流式生成器。
 
     payload 是 dict（新消息）或 Command（恢复审批），两种入口共用同一套事件协议：
         status -> (tool | token)* -> interrupt 或 done
     """
+    config = {**config, "recursion_limit": 40}
     thread_id = config["configurable"]["thread_id"]
     started = time.perf_counter()
     first_token_at: float | None = None
@@ -1719,6 +1734,21 @@ def _stream_agent_unlocked(payload, config: dict, title_source: str | None = Non
             "thread_id": thread_id, "title": title,
             "refund_task": refund_tasks.get(_user_from_config(config), thread_id),
         })
+
+    except GraphRecursionError:
+        # 中间件在 10 次模型调用处就该停下；走到这里说明兜底被触发。
+        # 仍然要按"正常回答"收尾：用户看到的是解释，不是系统故障。
+        logging.warning("Agent 达到递归上限 thread=%s", thread_id)
+        yield _sse("token", {"text": _RECURSION_MESSAGE})
+        try:
+            title = touch_session(thread_id, title_source, user=_user_from_config(config))
+            yield _sse("done", {
+                "thread_id": thread_id, "title": title,
+                "refund_task": refund_tasks.get(_user_from_config(config), thread_id),
+            })
+        except Exception:
+            logging.exception("递归上限收尾失败 thread=%s", thread_id)
+            yield _sse("done", {"thread_id": thread_id})
 
     except Exception:
         logging.exception("Agent 流式调用失败")
