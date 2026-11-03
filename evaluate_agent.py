@@ -1,4 +1,4 @@
-"""端到端 Agent 评测：工具选择 + 答案正确性 + 任务成功率。
+"""问答链路开发回归：工具选择 + 关键词命中（不代表退款任务办结率）。
 
 这个脚本回答的是简历上那句话：
 「任务执行成功率」到底是多少。
@@ -14,7 +14,8 @@
 2. 答案正确   答案里出现了期望的关键事实（数字、关键词）
 3. 拒答正确   知识库没答案的题，必须明确说"无法确认"而不是编
 
-三项全过才算这个任务成功。这就是「任务执行成功率」的口径。
+三项全过计为问答回归通过。完整退款任务及动作终态见 task_eval.py，
+不能把本脚本的关键词命中率写成业务任务办结率。
 """
 
 import re
@@ -132,7 +133,7 @@ def evaluate(include_holdout: bool = True, multiturn: bool = False) -> dict:
     )
 
     print("=" * 68)
-    print("端到端 Agent 评测 —— " + ("多轮对话" if multiturn else "单轮问答"))
+    print("问答链路回归 —— " + ("多轮对话" if multiturn else "单轮问答"))
     print("=" * 68)
 
     s = stats()
@@ -215,7 +216,7 @@ def evaluate(include_holdout: bool = True, multiturn: bool = False) -> dict:
     print(f"任务数            : {total}")
     print(f"工具选择正确      : {tool_ok_n}/{total} = {tool_ok_n / total:.1%}")
     print(f"答案命中关键事实  : {kw_ok_n}/{total} = {kw_ok_n / total:.1%}")
-    print(f"端到端任务成功率  : {passed}/{total} = {passed / total:.1%}")
+    print(f"问答回归通过率    : {passed}/{total} = {passed / total:.1%}")
     print()
     print(f"平均耗时          : {sum(latencies) / total:.2f}s")
     print(f"最慢任务          : {max(latencies):.2f}s")
@@ -257,7 +258,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 68)
     print("总览")
     print("=" * 68)
-    print(f"  单轮任务成功率 : {single['passed']}/{single['total']}"
+    print(f"  单轮问答通过率 : {single['passed']}/{single['total']}"
           f" = {single['success_rate']:.0%}")
-    print(f"  多轮任务成功率 : {multi['passed']}/{multi['total']}"
+    print(f"  多轮问答通过率 : {multi['passed']}/{multi['total']}"
           f" = {multi['success_rate']:.0%}")

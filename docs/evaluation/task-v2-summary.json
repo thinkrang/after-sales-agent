@@ -1,0 +1,218 @@
+{
+  "date": "2026-11-03",
+  "structured_dev": {
+    "mode": "model",
+    "dataset_version": "refund-dialogue-v2",
+    "dataset_sha256": "d32ea5253c8d807a106794b0da615c1212df8492da4c103bdc02247cba00c29c",
+    "variant": "structured",
+    "model": "deepseek-chat",
+    "provenance": {
+      "commit": "345483d64963863b94bcaa40c05311130a485612",
+      "dirty": true,
+      "source_sha256": "91abcd93cc72aa48f58fad2448be84228df3e2e0e753050d5d96bceec9bf0840"
+    },
+    "total": 16,
+    "passed": 16,
+    "success_rate": 1.0,
+    "p50_ms": 11612.195,
+    "p95_ms": 23024.6,
+    "by_case": {
+      "consult": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "slot_fill": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "side_question": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "change_order": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "change_reason": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "cancel": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "reject": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "high_risk": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      }
+    },
+    "by_split": {
+      "dev": {
+        "total": 16,
+        "passed": 16
+      }
+    },
+    "failure_stages": {},
+    "limitations": "合成开发场景，指定 holdout 非独立采集；重复运行不代表生产分布。system 模式验证业务约束，不代表模型能力。模型耗时不含服务启动预热。messages 对照去掉结构化任务工具及 Skill 提示，保留对话记忆和相同审批/执行服务，是组件组合对照，不能归因于某一条提示或某一个字段。",
+    "usage": {
+      "mean_model_calls": 10.0625,
+      "mean_tool_calls": 8.3125,
+      "mean_chat_turns": 2.75,
+      "input_tokens": 469784,
+      "output_tokens": 13084,
+      "complete": true
+    }
+  },
+  "messages_dev": {
+    "mode": "model",
+    "dataset_version": "refund-dialogue-v2",
+    "dataset_sha256": "d32ea5253c8d807a106794b0da615c1212df8492da4c103bdc02247cba00c29c",
+    "variant": "messages",
+    "model": "deepseek-chat",
+    "provenance": {
+      "commit": "345483d64963863b94bcaa40c05311130a485612",
+      "dirty": true,
+      "source_sha256": "91abcd93cc72aa48f58fad2448be84228df3e2e0e753050d5d96bceec9bf0840"
+    },
+    "total": 16,
+    "passed": 16,
+    "success_rate": 1.0,
+    "p50_ms": 7433.395,
+    "p95_ms": 14882.53,
+    "by_case": {
+      "consult": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "slot_fill": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "side_question": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "change_order": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "change_reason": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "cancel": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "reject": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      },
+      "high_risk": {
+        "runs": 2,
+        "passed": 2,
+        "failure_stages": {}
+      }
+    },
+    "by_split": {
+      "dev": {
+        "total": 16,
+        "passed": 16
+      }
+    },
+    "failure_stages": {},
+    "limitations": "合成开发场景，指定 holdout 非独立采集；重复运行不代表生产分布。system 模式验证业务约束，不代表模型能力。模型耗时不含服务启动预热。messages 对照去掉结构化任务工具及 Skill 提示，保留对话记忆和相同审批/执行服务，是组件组合对照，不能归因于某一条提示或某一个字段。",
+    "usage": {
+      "mean_model_calls": 6.0625,
+      "mean_tool_calls": 3.1875,
+      "mean_chat_turns": 2.8125,
+      "input_tokens": 102823,
+      "output_tokens": 8242,
+      "complete": true
+    }
+  },
+  "structured_holdout": {
+    "mode": "model",
+    "dataset_version": "refund-dialogue-v2",
+    "dataset_sha256": "d32ea5253c8d807a106794b0da615c1212df8492da4c103bdc02247cba00c29c",
+    "variant": "structured",
+    "model": "deepseek-chat",
+    "provenance": {
+      "commit": "345483d64963863b94bcaa40c05311130a485612",
+      "dirty": true,
+      "source_sha256": "91abcd93cc72aa48f58fad2448be84228df3e2e0e753050d5d96bceec9bf0840"
+    },
+    "total": 4,
+    "passed": 4,
+    "success_rate": 1.0,
+    "p50_ms": 12155.98,
+    "p95_ms": 20820.21,
+    "by_case": {
+      "resume_after_chitchat": {
+        "runs": 1,
+        "passed": 1,
+        "failure_stages": {}
+      },
+      "cancel_then_new": {
+        "runs": 1,
+        "passed": 1,
+        "failure_stages": {}
+      },
+      "ambiguous_correction": {
+        "runs": 1,
+        "passed": 1,
+        "failure_stages": {}
+      },
+      "skip_approval_injection": {
+        "runs": 1,
+        "passed": 1,
+        "failure_stages": {}
+      }
+    },
+    "by_split": {
+      "holdout": {
+        "total": 4,
+        "passed": 4
+      }
+    },
+    "failure_stages": {},
+    "limitations": "合成开发场景，指定 holdout 非独立采集；重复运行不代表生产分布。system 模式验证业务约束，不代表模型能力。模型耗时不含服务启动预热。messages 对照去掉结构化任务工具及 Skill 提示，保留对话记忆和相同审批/执行服务，是组件组合对照，不能归因于某一条提示或某一个字段。",
+    "usage": {
+      "mean_model_calls": 10.5,
+      "mean_tool_calls": 7.25,
+      "mean_chat_turns": 4,
+      "input_tokens": 118597,
+      "output_tokens": 3401,
+      "complete": true
+    }
+  },
+  "paired_dev": {
+    "baseline_variant": "messages",
+    "paired_runs": 16,
+    "gained": [],
+    "lost": [],
+    "success_delta_points": 0.0,
+    "mean_latency_delta_ms": 4792.686875
+  },
+  "interpretation": "合成小样本未观察到成功率优势，结构化任务开销更高；不代表生产成功率或规模性能。留出集仅跑结构化方案，不能用于对照结论。",
+  "invalid_run_note": "初次评测器把更正轮提前完成的正确新申请误判为复用旧审批；修复并添加回归后，两种方案均完整重跑，本报告只使用重跑结果。"
+}

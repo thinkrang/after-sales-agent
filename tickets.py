@@ -57,6 +57,8 @@ def _now() -> str:
 # 后加的列。老库（CREATE TABLE 时代没有这些字段）需要 ALTER 补上，
 # 否则 SELECT * 出来的 dict 缺键，下游 .get() 全是默认值，很难排查。
 _ADDED_COLUMNS = {
+    "approval_protocol": "TEXT NOT NULL DEFAULT 'legacy'",
+    "task_revision": "INTEGER",
     "risk_tier": "TEXT NOT NULL DEFAULT 'low'",
     "risk_reasons": "TEXT NOT NULL DEFAULT '[]'",
     "required_role": "TEXT NOT NULL DEFAULT 'customer'",
@@ -146,6 +148,8 @@ def init_tickets_table() -> None:
             """
         )
         _ensure_columns(conn)
+        from refund_tasks import init_schema
+        init_schema(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ticket_thread ON refund_tickets(thread_id)"
         )
@@ -231,6 +235,8 @@ def create_ticket(
     risk_reasons: str = "[]",
     required_role: str = "customer",
     rule_version: str = "",
+    task_revision: int | None = None,
+    approval_protocol: str = "legacy",
 ) -> dict:
     """Create one active ticket for an exact action payload.
 
@@ -243,13 +249,20 @@ def create_ticket(
     requester_id = requester_id or operator
 
     with _lock, db.session(DB_PATH) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        from refund_tasks import guard_action, bind_ticket
+        task = guard_action(
+            conn, tenant_id=tenant_id, requester_id=requester_id,
+            thread_id=thread_id, order_id=order_id, reason=reason,
+            task_revision=task_revision,
+        )
         existing = conn.execute(
             """
             SELECT * FROM refund_tickets
             WHERE tenant_id = ? AND requester_id = ? AND thread_id = ?
               AND order_id = ? AND payload_hash = ?
               AND status IN (?, ?, ?)
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
             """,
             (
                 tenant_id,
@@ -263,7 +276,10 @@ def create_ticket(
             ),
         ).fetchone()
         if existing:
-            return _row_to_dict(existing)
+            bind_ticket(conn, task, existing["id"])
+            return _row_to_dict(conn.execute(
+                "SELECT * FROM refund_tickets WHERE id=?", (existing["id"],)
+            ).fetchone())
         try:
             conn.execute(
                 """
@@ -302,7 +318,7 @@ def create_ticket(
                 WHERE tenant_id = ? AND requester_id = ? AND thread_id = ?
                   AND order_id = ? AND payload_hash = ?
                   AND status IN (?, ?, ?)
-                ORDER BY created_at DESC LIMIT 1
+                ORDER BY created_at DESC, rowid DESC LIMIT 1
                 """,
                 (
                     tenant_id,
@@ -316,8 +332,13 @@ def create_ticket(
                 ),
             ).fetchone()
             if raced:
-                return _row_to_dict(raced)
+                bind_ticket(conn, task, raced["id"])
+                return _row_to_dict(conn.execute(
+                    "SELECT * FROM refund_tickets WHERE id=?", (raced["id"],)
+                ).fetchone())
             raise
+        bind_ticket(conn, task, ticket_id)
+        conn.execute("UPDATE refund_tickets SET approval_protocol=? WHERE id=?", (approval_protocol, ticket_id))
         row = conn.execute(
             "SELECT * FROM refund_tickets WHERE id = ?", (ticket_id,)
         ).fetchone()
@@ -493,7 +514,7 @@ def find_pending(
             f"""
             SELECT * FROM refund_tickets
             WHERE {' AND '.join(clauses)}
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
             """,
             params,
         ).fetchone()
@@ -535,7 +556,7 @@ def find_executed(
             f"""
             SELECT * FROM refund_tickets
             WHERE {' AND '.join(clauses)}
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
             """,
             params,
         ).fetchone()
@@ -631,7 +652,7 @@ def find_pending_for_action(
             WHERE thread_id = ? AND tenant_id = ? AND requester_id = ?
               AND order_id = ? AND payload_hash = ?
               AND status IN (?, ?, ?)
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
             """,
             (
                 thread_id,
@@ -662,7 +683,7 @@ def find_action_ticket(
             SELECT * FROM refund_tickets
             WHERE thread_id = ? AND tenant_id = ? AND requester_id = ?
               AND order_id = ? AND payload_hash = ?
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
             """,
             (
                 thread_id,
@@ -695,7 +716,7 @@ def acquire_execution(
             WHERE thread_id = ? AND tenant_id = ? AND requester_id = ?
               AND order_id = ? AND payload_hash = ?
               AND status IN (?, ?, ?)
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
             """,
             (
                 thread_id,

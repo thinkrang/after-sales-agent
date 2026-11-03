@@ -23,7 +23,7 @@
 
 | 层 | 选型 |
 |---|---|
-| Agent | LangGraph 1.2（`create_agent` + `HumanInTheLoopMiddleware`） |
+| Agent | LangGraph 1.2（对话 Agent + 独立审批/执行 StateGraph） |
 | 模型 | DeepSeek（OpenAI 兼容接口） |
 | 检索 | Chroma + `bge-small-zh-v1.5`，多租户 `where` 前置过滤 |
 | 鉴权 | PBKDF2 密码哈希 + HMAC-SHA256 Bearer token |
@@ -37,13 +37,29 @@
 
 ## 核心能力
 
+**新增：持久化退款任务与任务终态评测**
+
+退款的订单、原因、咨询/申请意图、版本和关联工单独立于聊天记录保存在 SQLite。
+模型通过 `get_refund_task` / `update_refund_task` 逐步补全；新提交的退款动作必须
+匹配当前 `task_revision`。改订单会清空未重新提供的原因；修改或撤回任务会在
+**同一数据库事务**中撤销原待审批，已批准/执行中的退款不可修改或撤回，已执行的退款不可撤回。
+
+审批卡片支持“修改申请”“撤回申请”，高风险申请的发起人也能撤回。
+对话图与退款执行图分离：待审批时仍能处理自然语言改口、取消和插话。
+修改后旧工单先在数据库失效，再关闭独立执行图；会话不再悬空等待工具结果。
+任务进度与修改时间线可在聊天顶部查看。
+
+`task_eval.py` 分开报告确定性业务回归与真实模型任务评测。判定基于工单终态、
+订单/原因、实际退款次数和会话是否正常收尾，不把回答命中关键词等同于退款办结。
+运行方法和边界见 [任务状态与评测说明](docs/refund-tasks.md)。
+
 **1. 带证据核查的 RAG**
 检索后先由 LLM 判断"证据是否足以回答"，不足则明确拒答，而不是硬编一个答案。检索结果带来源标注，支持追溯。
 
 检索本身是**向量 + BM25 混合召回**（RRF 融合，权重 0.6 : 0.4）。纯向量在 152 篇语料上会被结构相似的 SKU 文档干扰——「商品编号001」错配到「正装皮鞋」——BM25 的精确匹配正好补这个洞。租户过滤在检索**前**完成（交给向量库的 `where` 条件），不是先取全量再筛。
 
 **2. 风险分级审批**
-退款申请会通过 LangGraph `interrupt` 暂停。服务端在展示卡片前创建 `pending_approval` 工单，把登录用户、租户、会话、订单、金额和退款原因哈希绑定在一起。恢复时必须提交同一 `approval_id`，只改订单号或原因都无法复用审批。
+退款的独立执行图会通过 LangGraph `interrupt` 等待审批，对话图仍可继续处理新消息。服务端在展示卡片前创建 `pending_approval` 工单，把登录用户、租户、会话、订单、金额和退款原因哈希绑定在一起。恢复时必须提交同一 `approval_id`，只改订单号或原因都无法复用审批。
 
 工单上还会记录**风险分级**（`risk_tier` / `risk_reasons` / `rule_version`）：
 
@@ -209,7 +225,36 @@ pytest                    # 默认不调用大模型
 pytest -m llm             # 需要真实模型的端到端测试
 ```
 
-GitHub Actions 会运行核心鉴权/退款单测、Python 编译检查和前端内联 JavaScript 语法检查；依赖完整模型的集成测试仍建议在本地或 Docker 中执行。
+GitHub Actions 会运行核心鉴权/退款单测、任务终态回归、真实 LangGraph HITL + SQLite 集成测试
+（脚本模型，不调用付费 API）、Python 编译和前端 JavaScript 语法检查。
+真实远程模型和检索链路仍需要在完整运行环境中另行评测。
+
+---
+
+## 完整任务评测（2026-11-03）
+
+真实 `deepseek-chat`，独立临时数据库，主模型与证据核查均计入调用和 token。
+开发集 8 个合成任务重复两轮；指定留出集 4 个合成任务运行一轮。
+
+| 方案 | 数据 | 完整任务通过 | P50 | 平均模型调用/任务 |
+|---|---|---|---|---|
+| 结构化任务 + Skill | dev，16 次 | 16/16 | 11.61 s | 10.06 |
+| 聊天记忆对照 | dev，16 次 | 16/16 | 7.43 s | 6.06 |
+| 结构化任务 + Skill | holdout，4 次 | 4/4 | 12.16 s | 10.50 |
+
+这组小样本**没有观察到成功率提升**。结构化任务方案的每任务平均耗时高 4.79 秒，
+开发集总 token 为 482,868，对照为 111,065；其中包含 Skill 和工具结果引入的上下文开销。
+对照同时去掉任务工具和 Skill 提示，是组件组合对照，不能把开销归因于某个单独字段。
+留出集未跑对照，且仍是人工编写的合成场景，不代表生产用户分布。
+
+本轮价值在于可持续对话、版本与审批一致性、持久化恢复，以及可复现的业务终态验证；
+不能据此声称模型准确率提升或生产任务成功率 100%。
+完整参数、代码/数据指纹及分场景结果见 [评测摘要](docs/evaluation/task-v2-summary.json)，
+复现与限制见 [任务评测说明](docs/refund-tasks.md)。
+
+初次运行中发现并修复了评测器对“更正轮已提前完成新申请”的误判；两种方案完整重跑，
+表中只使用修复后的结果。运行 API/会话/检索/安全测试时使用知识库副本：223 项通过、
+1 项跳过，2 项真实模型 pytest 用例按标记排除。上述模型评测另行运行，未计入单测数量。
 
 ---
 
@@ -225,8 +270,8 @@ GitHub Actions 会运行核心鉴权/退款单测、Python 编译检查和前端
 | 检索 MRR@10 | 0.9660 | 0.8814 | **0.8866** |
 | 检索 P50 / P95 | 14.2 / 15.7 ms | 14.9 / 16.5 ms | 15.7 / 17.0 ms |
 | 证据核查准确率 | 100% | 100% | 100%（TP 9 / TN 8 / FP 0 / FN 0） |
-| 单轮任务成功率 | 50/50 | 76/80 | **77/80** |
-| 多轮任务成功率 | 12/12 | 12/12 | 12/12 |
+| 单轮问答回归通过率 | 50/50 | 76/80 | **77/80** |
+| 多轮问答回归通过率 | 12/12 | 12/12 | 12/12 |
 
 指标随语料扩大而下降，这是**预期的**：22 个 chunk 时 `top_k=5` 覆盖 23% 的库，
 任何策略都能拿满分；152 个 chunk 时只覆盖 3.3%，指标才开始有区分度。
@@ -309,7 +354,7 @@ tune_rrf ──────────┘         ├─ vector  → rag.debug_
 
 | | 纯向量 | 混合召回（两遍） |
 |---|---|---|
-| 单轮任务成功率 | 76/80 | **77/80、78/80** |
+| 单轮问答回归通过率 | 76/80 | **77/80、78/80** |
 | 商品信息类失败 | 4 条（E01 / E11 / P01 / P14） | 1 条（P01） |
 
 **固定的那条失败是 P01**「我想买件跑步穿的裤子，价格是多少？」——
@@ -363,7 +408,8 @@ python action_eval.py --with-model   # 加上模型行为场景，约 1.5 分钟
 ```bash
 python evaluate_rag.py            # 检索策略对比
 python evaluate_answerability.py  # 证据核查二分类
-python evaluate_agent.py          # 端到端任务成功率
+python evaluate_agent.py          # 问答回归（关键词口径）
+python task_eval.py --mode model --split dev --repeat 3 --output work/structured.json
 python tune_rrf.py                # RRF 权重扫描（仅用非 hold-out）
 ```
 
@@ -482,7 +528,7 @@ agent 只读前 3 篇，所以按 R@3 选。
 早期实现是"任何异常都 mark_failed"。一次瞬时抖动就把工单打进终态，
 这笔退款永远补不上——而客户可能一直在等。
 
-### 4. 会话闭环：悬空的 tool_calls 会把后续对话打挂
+### 4. 旧版会话闭环问题与当前双图设计
 
 图停在 `interrupt` 时，assistant 已经发出过 `create_refund_request` 的
 tool_calls，但工具没执行，历史里就缺对应的 `ToolMessage`。这时候只要再发
@@ -495,7 +541,7 @@ An assistant message with 'tool_calls' must be followed by tool messages
 用户看到的是"流式回答失败"。**任何未解决的审批都会触发这个问题**，
 不分高风险低风险——只是之前的验收每次都先把审批处理掉，所以没暴露。
 
-两处修复：
+旧版采用两处修复（仅保留为升级兼容路径）：
 
 1. **待审批时拦住新消息**（`_stream_agent` 入口）：不调 agent，把提示和
    审批卡片重新推给前端。高风险单提示"已提交主管审批"，低风险提示"还在
@@ -504,7 +550,10 @@ An assistant message with 'tool_calls' must be followed by tool messages
    身份 resume 一次，让中间件补上工具结果，图正常收尾。批准时工具会再跑一遍，
    但下游以工单 ID 为幂等键，只会返回原退款单号。
 
-恢复失败不影响退款本身——钱已经退完了，只是会话里少一句收尾说明，
+当前新申请使用 `submit_refund_request` 正常返回待审批工单，独立 `refund_flow.py` 持久化审批与执行。
+对话图无需挂起，因此可以继续理解改口、取消和插话；审批结果由服务端直接写回对话。
+
+旧路径的恢复失败不影响退款本身——钱已经退完了，只是会话里少一句收尾说明，
 所以这个异常不会抛给审批人，只在响应里带 `session_synced: false`。
 
 ### 5. 风险分级用确定性规则，不交给模型
@@ -628,6 +677,9 @@ pending_approval → approved → executed
 | PATCH | `/sessions/{id}` | 重命名 |
 | DELETE | `/sessions/{id}` | 删除（含对话记忆） |
 | GET | `/sessions/{id}/messages` | 历史消息 + 待审批动作 |
+| GET | `/sessions/{id}/refund-task/history` | 分页读取任务修改审计时间线 |
+| GET | `/sessions/{id}/refund-task` | 当前用户的退款任务、版本和缺失信息 |
+| PATCH | `/sessions/{id}/refund-task` | 按 expected_revision 修改/撤回任务，使旧待审批失效 |
 | POST | `/chat/stream` | 流式对话（SSE） |
 | POST | `/chat/resume` | 提交审批结果（SSE） |
 | POST | `/knowledge/upload` | 上传文档（异步，返回 task_id） |
@@ -648,7 +700,8 @@ SSE 事件协议：
 status → (tool | token)* → interrupt 或 done
 ```
 
-`interrupt` 表示停在审批点，前端需弹出确认卡片并调用 `/chat/resume`。
+SSE `interrupt` 表示存在待审批申请，前端弹出卡片并调用 `/chat/resume`；新申请的对话图仍可继续。
+执行图的中断位于单独的 `refund_memory.sqlite`，由已认证的审批接口恢复。
 
 ---
 
@@ -659,6 +712,12 @@ api.py                  FastAPI 应用、会话管理、SSE、审批接口
 auth.py                 密码哈希、Bearer token、服务端租户与角色
 orders.py               订单归属、退款资格、幂等退款网关
 refund_service.py       审批绑定、原子抢占、执行与对账
+refund_flow.py          独立持久化审批/执行图，不阻塞对话
+refund_tasks.py         任务版本、下一步建议、变更审计
+session_guard.py        单会话并发控制（不是全局 LLM 锁）
+task_scenarios.py       12 个合成多轮业务任务（dev/holdout 分开）
+task_eval.py            分层报告、重复运行、场景指纹、配对对照
+task_eval_model.py      真模型任务回放与业务终态验收
 reconcile_refunds.py    对账批处理：恢复已批准/执行中的退款工单
 rag.py                  索引构建、文档增删、检索、证据格式化、多租户过滤
 retrieval.py            四种检索策略（vector / bm25 / hybrid / rerank）
@@ -682,7 +741,7 @@ action_eval_model.py    8 条模型行为场景（独立进程，需真实模型
 risk.py                 退款风险分级规则（纯函数，带版本号）
 evaluate_rag.py         检索策略对比
 evaluate_answerability.py  证据核查二分类
-evaluate_agent.py       端到端任务成功率
+evaluate_agent.py       问答回归通过率（非退款办结率）
 tune_rrf.py             RRF 权重扫描
 rebuild_index.py        保留上传文档的重建索引
 seed_distractors.py     生成干扰文档
@@ -724,7 +783,7 @@ Dockerfile / docker-compose.yml / requirements.txt
 - **知识库规模中等**（152 篇 / 152 个 chunk）。`top_k=5` 覆盖 3.3%，`R@3` 96.15%、
   `Hit@1` 80.77%，指标有区分度了。但语料是**自己按已知内容写的**，覆盖不到真实用户的
   问法分布——真实场景的指标大概率更低。
-- **Agent 端到端 100% 是天花板问题**。题目与文档边界清晰，难负例的"缺失信息"都是文档里完全没出现过的概念，拒答偏容易。想做出区分度需要"边界可答性"题或"文档冲突"题。
+- **旧问答回归 100% 是天花板问题**。题目与文档边界清晰，难负例的"缺失信息"都是文档里完全没出现过的概念，拒答偏容易。想做出区分度需要"边界可答性"题或"文档冲突"题。
 - **检索是向量 + BM25 混合召回（0.6 : 0.4）**。这个配置只在当前语料上验证过：
   152 篇里有一批结构高度相似的 SKU，BM25 的精确匹配正好补上向量的短板。
   换到以口语化提问为主的语料，权重需要重跑 `tune_rrf.py`。Reranker 因网络原因未接入

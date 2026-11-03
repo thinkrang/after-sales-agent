@@ -47,13 +47,13 @@ def enable_wal(path: str | Path) -> None:
         print(f"[db] {path} 开启 WAL 失败：{exc}")
 
 
-def connect(path: str | Path, timeout: float = 10.0) -> sqlite3.Connection:
+def connect(path: str | Path, timeout: float = 10.0, *, cross_thread: bool = False) -> sqlite3.Connection:
     """打开连接并套上**每连接**级别的并发 PRAGMA。
 
     timeout 是 Python 层的连接超时；busy_timeout 是 SQLite 层的忙等，
     两者作用不同，都保留。
     """
-    conn = sqlite3.connect(path, timeout=timeout)
+    conn = sqlite3.connect(path, timeout=timeout, check_same_thread=not cross_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=5000")
     # NORMAL 在 WAL 下足够安全（崩溃最多丢最后一个事务，不会损坏库），
@@ -84,7 +84,10 @@ def hold(path: str | Path) -> None:
     key = str(Path(path).resolve())
     if key in _keepers:
         return
-    conn = connect(path)
+    # Keeper connections are not used for business queries after initialization.
+    # Lifespan may create them on the ASGI thread and shutdown may close them
+    # on the caller thread (notably TestClient/Windows temporary databases).
+    conn = connect(path, cross_thread=True)
     # 一次读操作就会触发 WAL 文件创建（写入路径才需要，但读也会建立 shm）
     conn.execute("SELECT 1").fetchone()
     _keepers[key] = conn

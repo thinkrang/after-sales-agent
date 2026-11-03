@@ -519,6 +519,12 @@ html[data-theme="dark"] .welcome-mark{
       <span class="pill">DeepSeek</span>
     </header>
 
+    <details id="refundTask" hidden style="padding:10px 24px;border-bottom:1px solid var(--border);font-size:13px">
+      <summary id="refundTaskSummary"></summary>
+      <p id="refundTaskDetail"></p>
+      <div id="refundTaskHistory"></div>
+    </details>
+
     <div class="scroll" id="scroll">
       <div class="thread" id="thread"></div>
     </div>
@@ -611,6 +617,40 @@ html[data-theme="dark"] .welcome-mark{
     loading: false,
     stick: true,
   };
+
+  function renderTask(task) {
+    const panel = document.getElementById("refundTask");
+    panel.hidden = !task || !task.revision;
+    if (panel.hidden) return;
+    const status = ({ consulting:"咨询中", collecting:"待补充信息", ready:"待提交申请",
+      pending_approval:"待确认或审批", approved:"已批准", executing:"正在处理",
+      executed:"已退款", rejected:"申请已拒绝或撤回", cancelled:"已撤回", failed:"需人工核实" })[task.status] || "处理中";
+    document.getElementById("refundTaskSummary").textContent = "退款进度 · " + status + (task.order_id ? " · " + task.order_id : "");
+    document.getElementById("refundTaskDetail").textContent =
+      (task.reason ? "原因：" + task.reason + "。" : "") +
+      (task.next_action === "ask_order" ? "请补充订单号。" : task.next_action === "ask_reason" ? "请补充退款原因。" :
+       task.next_action === "await_approver" ? "正在等待主管审批，期间可继续咨询或撤回。" :
+       task.next_action === "await_customer" ? "请在申请卡片上确认；也可直接告诉我需要怎样修改。" : "") +
+      (task.refund_id ? "退款单号：" + task.refund_id : "");
+  }
+
+  document.getElementById("refundTask").addEventListener("toggle", async (event) => {
+    if (!event.target.open || !state.currentId) return;
+    const sid = state.currentId;
+    try {
+      const data = await api("/sessions/" + encodeURIComponent(sid) + "/refund-task/history");
+      if (state.currentId !== sid) return;
+      const list = document.getElementById("refundTaskHistory");
+      list.replaceChildren();
+      for (const event of data.events || []) {
+        const line = document.createElement("p");
+        const snap = event.snapshot;
+        line.textContent = event.created_at + " · " + (snap.cancelled ? "撤回申请" :
+          (snap.order_id || "待补订单号") + " · " + (snap.reason || "待补原因"));
+        list.appendChild(line);
+      }
+    } catch (err) { toast("进度记录读取失败：" + err.message); }
+  });
 
   const SUGGESTIONS = [
     "你们的退货政策是什么？",
@@ -915,6 +955,7 @@ html[data-theme="dark"] .welcome-mark{
 
   /* ============ 消息渲染 ============ */
   function clearThread() {
+    renderTask(null);
     el.thread.innerHTML = "";
   }
 
@@ -1095,6 +1136,7 @@ html[data-theme="dark"] .welcome-mark{
     try {
       const data = await api("/sessions/" + id + "/messages");
       renderHistory(data.messages);
+      renderTask(data.refund_task);
 
       // 刷新页面后如果还有待审批的操作，把确认卡片补回来
       if (data.pending && data.pending.length) {
@@ -1305,9 +1347,11 @@ html[data-theme="dark"] .welcome-mark{
       const args = document.createElement("div");
       args.className = "approval-args";
       for (const [k, v] of Object.entries(action.args || {})) {
+        if (k === "task_revision") continue;
+        const label = ({ order_id: "订单号", reason: "退款原因" })[k] || k;
         const line = document.createElement("div");
         line.innerHTML =
-          '<span class="k">' + escapeHtml(k) + "</span>" +
+          '<span class="k">' + escapeHtml(label) + "</span>" +
           '<span class="v">' + escapeHtml(String(v)) + "</span>";
         args.appendChild(line);
       }
@@ -1338,6 +1382,11 @@ html[data-theme="dark"] .welcome-mark{
     approve.className = "approve";
     approve.textContent = "批准执行";
 
+    const edit = document.createElement("button");
+    edit.className = "reject";
+    edit.textContent = "修改申请";
+
+    acts.appendChild(edit);
     acts.appendChild(reject);
     acts.appendChild(approve);
     box.appendChild(acts);
@@ -1351,7 +1400,7 @@ html[data-theme="dark"] .welcome-mark{
       approve.disabled = true;
       approve.textContent = "等待主管审批";
     }
-    return { box, acts, approve, reject, blocked };
+    return { box, acts, approve, reject, edit, blocked, needsManager };
   }
 
   /* ============ 单轮流式执行 ============ */
@@ -1430,11 +1479,13 @@ html[data-theme="dark"] .welcome-mark{
           scrollToBottom();
         }
       } else if (type === "interrupt") {
+        renderTask(data.refund_task);
         finished = true;
         interrupt = data;
       } else if (type === "error") {
         throw new Error(data.message || "流式回答失败");
       } else if (type === "done") {
+        renderTask(data.refund_task);
         finished = true;
       }
     };
@@ -1500,6 +1551,77 @@ html[data-theme="dark"] .welcome-mark{
     turn.appendChild(card.box);
     scrollToBottom();
 
+    // 修改/撤回先提交服务端任务版本，旧审批在同一事务中失效。
+    // 下一条消息会通过 HITL reject 补齐旧 tool call，然后继续新任务。
+    const editTask = async (cancel) => {
+      card.edit.disabled = true;
+      try {
+        const taskUrl = "/sessions/" + encodeURIComponent(interrupt.thread_id) + "/refund-task";
+        const task = await api(taskUrl);
+        const applyChange = async (values) => {
+          const updated = await api(taskUrl, { method: "PATCH", body: JSON.stringify({
+            expected_revision: task.revision, ...values,
+          }) });
+          renderTask(updated);
+          const result = document.createElement("div");
+          result.className = "approval-done no";
+          result.textContent = cancel
+            ? "申请已撤回。你可以继续咨询。"
+            : "申请已修改，原审批已失效。请发送消息继续核实并提交。";
+          card.acts.replaceWith(result);
+          const form = card.box.querySelector("form");
+          if (form) form.remove();
+          el.input.focus();
+        };
+        if (cancel) {
+          await applyChange({ cancel: true });
+          return;
+        }
+        if (card.box.querySelector("form")) return;
+        const form = document.createElement("form");
+        form.className = "approval-args";
+        const oldArgs = (interrupt.actions[0] || {}).args || {};
+        const orderLabel = document.createElement("label");
+        orderLabel.textContent = "订单号 ";
+        const order = document.createElement("input");
+        order.value = task.order_id || oldArgs.order_id || "";
+        order.maxLength = 64;
+        order.required = true;
+        orderLabel.appendChild(order);
+        const reasonLabel = document.createElement("label");
+        reasonLabel.textContent = "退款原因 ";
+        const reason = document.createElement("input");
+        reason.value = task.reason || oldArgs.reason || "";
+        reason.maxLength = 500;
+        reason.required = true;
+        reasonLabel.appendChild(reason);
+        const save = document.createElement("button");
+        save.type = "submit";
+        save.textContent = "保存修改";
+        const close = document.createElement("button");
+        close.type = "button";
+        close.textContent = "关闭编辑";
+        close.onclick = () => form.remove();
+        form.append(orderLabel, reasonLabel, save, close);
+        form.onsubmit = async (event) => {
+          event.preventDefault();
+          save.disabled = true;
+          try {
+            await applyChange({ order_id: order.value, reason: reason.value, intent: "apply" });
+          } catch (err) {
+            toast("修改未保存：" + err.message);
+            save.disabled = false;
+          }
+        };
+        card.box.appendChild(form);
+        order.focus();
+      } catch (err) {
+        toast("操作失败：" + err.message);
+      } finally {
+        card.edit.disabled = false;
+      }
+    };
+
     const decide = async (decision) => {
       card.approve.disabled = true;
       card.reject.disabled = true;
@@ -1562,7 +1684,10 @@ html[data-theme="dark"] .welcome-mark{
     };
 
     card.approve.onclick = () => decide("approve");
-    card.reject.onclick = () => decide("reject");
+    card.edit.onclick = () => editTask(false);
+    card.reject.textContent = "撤回申请";
+    card.reject.disabled = false;
+    card.reject.onclick = () => editTask(true);
   }
 
   /* ============ 发送消息 ============ */

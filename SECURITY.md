@@ -32,6 +32,21 @@ action. It treats the model and retrieved documents as untrusted inputs.
   database constraint prevents two successful refunds for one execution key.
 - A retry after a downstream success but before ticket completion reuses the
   same key and reconciles the original refund id.
+- Refund task edits use an optimistic revision. Changing/cancelling the task
+  and rejecting its old pending approvals share a SQLite write transaction.
+  If approval wins the race, editing is rejected; if editing wins, the old
+  approval cannot execute. Already executed refunds cannot be withdrawn.
+- New chat actions require a registered task with apply intent and matching
+  revision/order/reason. Existing legacy pending approvals remain resumable.
+  Task intent is model-extracted, not an authorization grant; human approval
+  and the server's execution checks remain mandatory.
+- New conversation tools only submit/withdraw proposals. Approval/execution
+  runs in a separate checkpointed graph. Resuming that graph without a real
+  server-owned decision cannot authorize a refund. Dialogue stays runnable
+  while approval waits; old dialogue interrupts remain supported for upgrades.
+- In-process per-conversation guards protect dialogue checkpoint writes from
+  simultaneous chat/result updates. They do not provide distributed locking
+  across multiple API workers; database CAS and uniqueness still guard money.
 
 ## Explicit demo limitations
 
@@ -46,9 +61,9 @@ action. It treats the model and retrieved documents as untrusted inputs.
 - The browser demo stores the Bearer token in `localStorage`. A production web
   frontend should prefer an HttpOnly/SameSite cookie or a backend-for-frontend
   session with CSRF protection.
-- The current HITL record is the authenticated customer's consent to execute
-  the proposed action. If business policy requires four-eyes review, add a
-  separate `approver` actor and reject self-approval in the workflow service.
+- Low-risk HITL is customer consent. High-risk tickets require a separate
+  approver in the same tenant and prohibit self-approval. Requesters may
+  withdraw a still-pending high-risk task through the task endpoint.
 - Rate limiting, WAF, secret rotation and SIEM export are deployment concerns
   not implemented in this repository.
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import json
 from dataclasses import dataclass
 
 import orders
@@ -88,8 +87,21 @@ def prepare_ticket(
     thread_id: str,
     order_id: str,
     reason: str,
+    task_revision: int | None = None,
+    approval_protocol: str = "legacy",
 ) -> tuple[dict, dict]:
     """Create the pending approval record before returning an interrupt."""
+    # Fail with task preconditions before attempting an incomplete order lookup.
+    # create_ticket repeats this guard under its write transaction to close the
+    # edit-vs-approval-creation race.
+    import db
+    from refund_tasks import guard_action
+    with db.session(tickets.DB_PATH) as conn:
+        guard_action(
+            conn, tenant_id=user.tenant_id, requester_id=user.username,
+            thread_id=thread_id, order_id=order_id.strip(), reason=reason,
+            task_revision=task_revision,
+        )
     order, decision, payload_hash = _payload_for(
         user,
         thread_id=thread_id,
@@ -120,6 +132,8 @@ def prepare_ticket(
         risk_reasons=json.dumps(list(assessment.reasons), ensure_ascii=False),
         required_role=assessment.required_role,
         rule_version=assessment.rule_version,
+        task_revision=task_revision,
+        approval_protocol=approval_protocol,
     )
     return ticket, order
 
@@ -291,6 +305,7 @@ def execute(
     thread_id: str,
     order_id: str,
     reason: str,
+    task_revision: int | None = None,
 ) -> dict:
     """Execute only an approved, exact action.
 
@@ -300,6 +315,15 @@ def execute(
     the downstream call but before marking executed, the same key returns the
     original refund id and repair can finish safely.
     """
+    if task_revision is not None:
+        from refund_tasks import guard_action
+        import db
+        with db.session(tickets.DB_PATH) as conn:
+            guard_action(
+                conn, tenant_id=user.tenant_id, requester_id=user.username,
+                thread_id=thread_id, order_id=order_id.strip(), reason=reason,
+                task_revision=task_revision,
+            )
     order, decision, payload_hash = _payload_for(
         user,
         thread_id=thread_id,

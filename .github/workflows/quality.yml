@@ -25,7 +25,8 @@ jobs:
           python -m py_compile \
             settings.py db.py auth.py orders.py tickets.py risk.py refund_service.py \
             api.py rag.py tasks.py rebuild_index.py reconcile_refunds.py \
-            action_eval.py action_eval_model.py
+            action_eval.py action_eval_model.py refund_tasks.py task_eval.py task_eval_model.py \
+            refund_flow.py session_guard.py task_scenarios.py
 
       # 这一组是安全与业务的核心回归：
       #   test_refund_workflow  审批绑定、原子迁移、幂等、失败重试语义
@@ -43,6 +44,9 @@ jobs:
         run: |
           python -X utf8 -m pytest \
             tests/test_refund_workflow.py \
+            tests/test_refund_tasks.py \
+            tests/test_task_evaluation.py \
+            tests/test_runtime_isolation.py \
             tests/test_tickets.py \
             tests/test_risk.py \
             tests/test_action_safety.py \
@@ -59,6 +63,15 @@ jobs:
       - name: Action-level safety report
         run: python action_eval.py
 
+      - name: Task postcondition regression report
+        run: python task_eval.py --repeat 2 --output work/task-system.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deterministic-task-report
+          path: work/task-system.json
+
       - name: Check inline frontend JavaScript syntax
         run: |
           node -e '
@@ -71,3 +84,22 @@ jobs:
             }
             console.log("inline JavaScript syntax OK");
           '
+
+  task-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install graph and HTTP test dependencies
+        run: >-
+          pip install pytest==9.1.1 fastapi==0.147.0 pydantic==2.13.5
+          httpx==0.28.1 python-dotenv==1.2.3 python-multipart==0.0.32
+          langchain==1.4.6 langchain-core==1.6.12 langgraph==1.2.16
+          langgraph-checkpoint==4.3.0 langchain-openai==1.7.2
+          langgraph-checkpoint-sqlite==3.1.2 openai==3.35.1
+      - name: Real HITL and SQLite task integration (scripted model)
+        run: python -X utf8 -m pytest tests/test_task_http.py tests/test_detached_tasks.py tests/test_refund_flow.py

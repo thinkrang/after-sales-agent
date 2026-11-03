@@ -24,22 +24,26 @@ def isolate_ticket_db(tmp_path_factory):
     import auth
     import orders
     import tickets
+    import settings
 
     root = tmp_path_factory.mktemp("runtime-db")
     originals = {
         "tickets": tickets.DB_PATH,
         "auth": auth.USER_DB,
         "orders": orders.ORDERS_DB,
+        "data_dir": settings.DATA_DIR,
     }
     tickets.DB_PATH = root / "tickets_test.sqlite"
     auth.USER_DB = root / "auth_test.sqlite"
     orders.ORDERS_DB = root / "orders_test.sqlite"
+    settings.DATA_DIR = root
     tickets.init_tickets_table()
     orders.init_order_db()
     yield root
     tickets.DB_PATH = originals["tickets"]
     auth.USER_DB = originals["auth"]
     orders.ORDERS_DB = originals["orders"]
+    settings.DATA_DIR = originals["data_dir"]
     import db
 
     db.release_all()
@@ -54,6 +58,7 @@ def client(isolate_ticket_db):
     app_module = __import__("api")
     app_module.SESSION_DB = isolate_ticket_db / "sessions_test.sqlite"
     app_module.MEMORY_DB = isolate_ticket_db / "memory_test.sqlite"
+    app_module.REFUND_MEMORY_DB = isolate_ticket_db / "refund_memory_test.sqlite"
 
     with TestClient(app) as c:
         response = c.post(
