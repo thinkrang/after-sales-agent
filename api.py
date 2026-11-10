@@ -7,7 +7,7 @@
 - 前端不再需要手输 thread_id：所有会话由 /sessions 接口下发，点击即切换
 """
 from __future__ import annotations
-from test_answerability import verify_evidence
+from evidence import verify_evidence
 
 
 import hashlib
@@ -396,18 +396,11 @@ def search_shop_info(question: str, config: RunnableConfig) -> str:
         logging.warning("知识库检索失败 question=%s", question, exc_info=True)
         return tool_result.retrieval_failure()
 
-    print(f"[Evidence Verification] {verdict}")
+    print(f"[Evidence Verification] sufficient={verdict.sufficient} "
+          f"{verdict.missing or verdict.quote[:40]}")
 
-    # 2. 解析 YES|... 或 NO|...
-    decision, separator, reason = verdict.partition("|")
-
-    decision = decision.strip().upper()
-    reason = reason.strip()
-
-    # 3. 核查通过：返回真实检索证据
-    if decision == "YES" and separator:
-
-
+    # 2. 核查通过：返回真实检索证据
+    if verdict.sufficient:
         return (
             "证据核查已通过。\n"
             "请仅根据以下知识库材料回答，"
@@ -415,10 +408,10 @@ def search_shop_info(question: str, config: RunnableConfig) -> str:
             + format_evidence(results)
         )
 
-    # 4. 核查不通过或输出异常：采取保守策略
+    # 3. 核查不通过：采取保守策略
     print("[RAG] 未取得足够证据，拒绝提供检索内容")
 
-    return tool_result.no_evidence(reason if separator else "核查结果无效")
+    return tool_result.no_evidence(verdict.missing or "核查结果无效")
 
 @tool
 def calculate_total(price: float, quantity: int) -> str:
@@ -911,7 +904,10 @@ def api_list_skills(user: CurrentUser):
 
 
 @app.get("/tickets")
-def api_list_tickets(user: CurrentUser, limit: int = 50, pending_only: bool = False):
+def api_list_tickets(
+    user: CurrentUser, limit: int = 50, pending_only: bool = False,
+    actionable_only: bool = False,
+):
     """工单列表，按创建时间倒序。也是审批的审计记录。
 
     可见范围按角色分三档：
@@ -920,16 +916,22 @@ def api_list_tickets(user: CurrentUser, limit: int = 50, pending_only: bool = Fa
     - 其他人：只看自己发起的
     """
     size = max(1, min(limit, 200))
-    if user.is_admin:
-        rows = list_tickets(limit=size)
-    elif user.has_role("approver"):
-        rows = list_tickets(limit=size, tenant_id=user.tenant_id)
-    else:
-        rows = list_tickets(
-            limit=size, tenant_id=user.tenant_id, requester_id=user.username
+    filters = {"status": tickets.PENDING} if pending_only else {}
+    if actionable_only:
+        if not user.has_role("approver"):
+            raise HTTPException(status_code=403, detail="审批队列需要 approver 角色")
+        # 队列只含当前人真正能批的工单；全部条件必须在 LIMIT 之前应用。
+        filters.update(
+            tenant_id=user.tenant_id, status=tickets.PENDING,
+            required_role="approver", exclude_requester_id=user.username,
         )
-    if pending_only:
-        rows = [r for r in rows if r["status"] == "pending_approval"]
+    elif user.is_admin:
+        pass
+    elif user.has_role("approver"):
+        filters.update(tenant_id=user.tenant_id)
+    else:
+        filters.update(tenant_id=user.tenant_id, requester_id=user.username)
+    rows = list_tickets(limit=size, **filters)
     return {"tickets": rows}
 
 

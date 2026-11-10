@@ -32,7 +32,9 @@ def task_api(tmp_path, monkeypatch):
                     format_evidence=lambda x: "", get_vector_store=lambda: None,
                     list_knowledge_documents=lambda **k: [], search_knowledge=lambda x: ""),
         "retrieval": dict(DEFAULT_STRATEGY="hybrid", retrieve=lambda *a, **k: []),
-        "test_answerability": dict(verify_evidence=lambda *a: "NO|未调用检索"),
+        # 核查器现在返回结构化结论；测试里不需要真实模型。
+        "evidence": dict(verify_evidence=lambda *a: types.SimpleNamespace(
+            sufficient=False, quote="", missing="未调用检索")),
         "tasks": dict(get_task_status=lambda x: {}, submit_index_task=lambda *a, **k: {}),
     }.items():
         module = types.ModuleType(name)
