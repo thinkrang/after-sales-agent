@@ -31,6 +31,7 @@
 | 服务 | FastAPI + SSE 流式 |
 | 异步任务 | Celery 5.5 + Redis（broker + result backend） |
 | 记忆 | LangGraph `SqliteSaver`（按 thread_id 隔离） |
+| 工具协议 | MCP（官方 Python SDK 2.x，streamable-http / stdio） |
 | 前端 | 原生 HTML/CSS/JS，无构建步骤 |
 
 ---
@@ -55,6 +56,12 @@
 ---
 
 ## 核心能力
+
+**新增：MCP 工具服务**
+
+售后能力抽成独立 MCP server：任何支持 MCP 的客户端都能调用，但租户由
+`Authorization: Bearer` token 决定，客户端不能自报。写操作只创建待审批工单，
+不执行退款。鉴权边界、工具清单与连接方式见 [MCP 工具服务](docs/mcp.md)。
 
 **新增：Loop / 上下文 / 长期记忆**
 
@@ -247,6 +254,9 @@ cp .env.example .env
 # 5. 首次建索引，然后启动
 python rebuild_index.py
 uvicorn api:app --port 8000
+
+# 可选：MCP 工具服务（另一套入口，共用同一套身份与审批）
+python mcp_server.py --transport streamable-http --port 8765
 ```
 
 > 仓库里不含 `.venv`（已在 `.gitignore`）。如果克隆后发现 `.venv` 是空目录，
@@ -767,6 +777,9 @@ reconcile_refunds.py    对账批处理：恢复已批准/执行中的退款工�
 prune_checkpoints.py    会话历史清理：按空闲天数删 checkpoint（默认预览，--apply 才写库）
 agent_context.py        逐轮循环边界、请求时压缩、任务快照注入
 long_memory.py          类型化偏好（可过期/删除）与只读售后历史
+evidence.py             证据核查（结构化输出，不依赖检索栈）
+mcp_server.py           MCP 协议层：5 个工具、Bearer 鉴权、HTTP/stdio 传输
+mcp_tools.py            MCP 工具实现：租户从 token 解析，写操作只建待审批
 rag.py                  索引构建、文档增删、检索、证据格式化、多租户过滤
 retrieval.py            四种检索策略（vector / bm25 / hybrid / rerank）
                         唯一检索入口：线上 agent 和评测脚本都走 retrieve()

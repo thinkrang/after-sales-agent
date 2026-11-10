@@ -43,5 +43,10 @@ pypdf==5.9.0
 celery==5.5.0
 redis==5.3.1
 
+# --- MCP 工具服务 ---
+# 官方 Python SDK 2.x：FastMCP 已更名为 MCPServer，协议 2026-07-28。
+# 只被 mcp_server.py 使用；API 主服务不依赖它。
+mcp==2.3.0
+
 # --- 测试 ---
 pytest==9.1.1
