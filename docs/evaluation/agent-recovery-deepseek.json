@@ -1,0 +1,410 @@
+{
+  "protocol": "recovery-postconditions-v1",
+  "model": "deepseek-chat",
+  "provenance": {
+    "commit": "2976c3f085e5f340f61e1f7a4ec674074734e3d7",
+    "dirty": true,
+    "source_sha256": "c44ff5d23c649709f51dcd968177b9a71ff88c4e799207a5e26592bf0125a216"
+  },
+  "dataset": [
+    {
+      "id": "lost_receipt",
+      "messages": [
+        "请申请 A300 的退款，原因是尺码不合适。请告诉我这笔的处理状态。"
+      ]
+    },
+    {
+      "id": "edit_while_waiting",
+      "messages": [
+        "帮我同时申请两笔退款：A300 尺码不合适，A400 有质量问题。",
+        "A400 继续等主管审批。只把 A300 的退款原因改成包装破损，A300 仍然申请退款。"
+      ]
+    }
+  ],
+  "pilot": {
+    "runs": 4,
+    "passed": 4,
+    "raw_sha256": "c9398080ea712264c974ab5fa5e2b40dd44fc731d66941467d79b7adfb23ad18"
+  },
+  "formal_raw_sha256": "2b47fd74fbc02c33e911ab32790e8d3ebb2cb887ef5f50643cfdb6df5b61f617",
+  "formal": [
+    {
+      "case": "lost_receipt",
+      "repeat": 1,
+      "variant": "fixed",
+      "outcome": "passed",
+      "model_calls": 4,
+      "input_tokens": 7689,
+      "output_tokens": 317,
+      "usage_complete": true,
+      "elapsed_ms": 9673.82,
+      "recovery_checks": {
+        "fault_triggered": true,
+        "outcome_unknown_seen": true,
+        "read_verified_after_fault": true,
+        "no_repeat_write_after_fault": true,
+        "single_original_pending_ticket": true,
+        "reported_pending": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_fixed_refund_plan",
+        "get_refund_plan"
+      ],
+      "faults_injected": 1,
+      "ticket_rows": 1,
+      "refund_rows": 0,
+      "first_answer_empty": false
+    },
+    {
+      "case": "lost_receipt",
+      "repeat": 1,
+      "variant": "plan",
+      "outcome": "passed",
+      "model_calls": 4,
+      "input_tokens": 9130,
+      "output_tokens": 393,
+      "usage_complete": true,
+      "elapsed_ms": 5108.76,
+      "recovery_checks": {
+        "fault_triggered": true,
+        "outcome_unknown_seen": true,
+        "read_verified_after_fault": true,
+        "no_repeat_write_after_fault": true,
+        "single_original_pending_ticket": true,
+        "reported_pending": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_refund_plan",
+        "get_refund_plan"
+      ],
+      "faults_injected": 1,
+      "ticket_rows": 1,
+      "refund_rows": 0,
+      "first_answer_empty": false,
+      "proposed_graphs": 1,
+      "matches_fixed_topology": true
+    },
+    {
+      "case": "edit_while_waiting",
+      "repeat": 1,
+      "variant": "fixed",
+      "outcome": "passed",
+      "model_calls": 5,
+      "input_tokens": 19615,
+      "output_tokens": 638,
+      "usage_complete": true,
+      "elapsed_ms": 6228.12,
+      "recovery_checks": {
+        "initial_two_pending": true,
+        "only_target_revised": true,
+        "old_approval_revoked": true,
+        "edit_called": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_fixed_refund_plan",
+        "edit_refund_plan_task"
+      ],
+      "faults_injected": 0,
+      "ticket_rows": 3,
+      "refund_rows": 0,
+      "first_answer_empty": false
+    },
+    {
+      "case": "edit_while_waiting",
+      "repeat": 1,
+      "variant": "plan",
+      "outcome": "passed",
+      "model_calls": 5,
+      "input_tokens": 21791,
+      "output_tokens": 876,
+      "usage_complete": true,
+      "elapsed_ms": 7774.56,
+      "recovery_checks": {
+        "initial_two_pending": true,
+        "only_target_revised": true,
+        "old_approval_revoked": true,
+        "edit_called": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_refund_plan",
+        "edit_refund_plan_task"
+      ],
+      "faults_injected": 0,
+      "ticket_rows": 3,
+      "refund_rows": 0,
+      "first_answer_empty": false,
+      "proposed_graphs": 1,
+      "matches_fixed_topology": true
+    },
+    {
+      "case": "lost_receipt",
+      "repeat": 2,
+      "variant": "plan",
+      "outcome": "passed",
+      "model_calls": 4,
+      "input_tokens": 9097,
+      "output_tokens": 397,
+      "usage_complete": true,
+      "elapsed_ms": 4256.25,
+      "recovery_checks": {
+        "fault_triggered": true,
+        "outcome_unknown_seen": true,
+        "read_verified_after_fault": true,
+        "no_repeat_write_after_fault": true,
+        "single_original_pending_ticket": true,
+        "reported_pending": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_refund_plan",
+        "get_refund_plan"
+      ],
+      "faults_injected": 1,
+      "ticket_rows": 1,
+      "refund_rows": 0,
+      "first_answer_empty": false,
+      "proposed_graphs": 1,
+      "matches_fixed_topology": true
+    },
+    {
+      "case": "lost_receipt",
+      "repeat": 2,
+      "variant": "fixed",
+      "outcome": "passed",
+      "model_calls": 4,
+      "input_tokens": 7739,
+      "output_tokens": 351,
+      "usage_complete": true,
+      "elapsed_ms": 4587.19,
+      "recovery_checks": {
+        "fault_triggered": true,
+        "outcome_unknown_seen": true,
+        "read_verified_after_fault": true,
+        "no_repeat_write_after_fault": true,
+        "single_original_pending_ticket": true,
+        "reported_pending": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_fixed_refund_plan",
+        "get_refund_plan"
+      ],
+      "faults_injected": 1,
+      "ticket_rows": 1,
+      "refund_rows": 0,
+      "first_answer_empty": false
+    },
+    {
+      "case": "edit_while_waiting",
+      "repeat": 2,
+      "variant": "plan",
+      "outcome": "passed",
+      "model_calls": 5,
+      "input_tokens": 21444,
+      "output_tokens": 946,
+      "usage_complete": true,
+      "elapsed_ms": 8072.42,
+      "recovery_checks": {
+        "initial_two_pending": true,
+        "only_target_revised": true,
+        "old_approval_revoked": true,
+        "edit_called": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_refund_plan",
+        "edit_refund_plan_task"
+      ],
+      "faults_injected": 0,
+      "ticket_rows": 3,
+      "refund_rows": 0,
+      "first_answer_empty": false,
+      "proposed_graphs": 1,
+      "matches_fixed_topology": true
+    },
+    {
+      "case": "edit_while_waiting",
+      "repeat": 2,
+      "variant": "fixed",
+      "outcome": "passed",
+      "model_calls": 5,
+      "input_tokens": 19302,
+      "output_tokens": 661,
+      "usage_complete": true,
+      "elapsed_ms": 6322.52,
+      "recovery_checks": {
+        "initial_two_pending": true,
+        "only_target_revised": true,
+        "old_approval_revoked": true,
+        "edit_called": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_fixed_refund_plan",
+        "edit_refund_plan_task"
+      ],
+      "faults_injected": 0,
+      "ticket_rows": 3,
+      "refund_rows": 0,
+      "first_answer_empty": false
+    },
+    {
+      "case": "lost_receipt",
+      "repeat": 3,
+      "variant": "fixed",
+      "outcome": "failed",
+      "model_calls": 1,
+      "input_tokens": 1199,
+      "output_tokens": 98,
+      "usage_complete": true,
+      "elapsed_ms": 813.32,
+      "recovery_checks": {
+        "fault_triggered": false
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [],
+      "faults_injected": 0,
+      "ticket_rows": 0,
+      "refund_rows": 0,
+      "first_answer_empty": true
+    },
+    {
+      "case": "lost_receipt",
+      "repeat": 3,
+      "variant": "plan",
+      "outcome": "passed",
+      "model_calls": 4,
+      "input_tokens": 9193,
+      "output_tokens": 390,
+      "usage_complete": true,
+      "elapsed_ms": 4114.43,
+      "recovery_checks": {
+        "fault_triggered": true,
+        "outcome_unknown_seen": true,
+        "read_verified_after_fault": true,
+        "no_repeat_write_after_fault": true,
+        "single_original_pending_ticket": true,
+        "reported_pending": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_refund_plan",
+        "get_refund_plan"
+      ],
+      "faults_injected": 1,
+      "ticket_rows": 1,
+      "refund_rows": 0,
+      "first_answer_empty": false,
+      "proposed_graphs": 1,
+      "matches_fixed_topology": true
+    },
+    {
+      "case": "edit_while_waiting",
+      "repeat": 3,
+      "variant": "fixed",
+      "outcome": "passed",
+      "model_calls": 5,
+      "input_tokens": 19075,
+      "output_tokens": 628,
+      "usage_complete": true,
+      "elapsed_ms": 6004.79,
+      "recovery_checks": {
+        "initial_two_pending": true,
+        "only_target_revised": true,
+        "old_approval_revoked": true,
+        "edit_called": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_fixed_refund_plan",
+        "edit_refund_plan_task"
+      ],
+      "faults_injected": 0,
+      "ticket_rows": 3,
+      "refund_rows": 0,
+      "first_answer_empty": false
+    },
+    {
+      "case": "edit_while_waiting",
+      "repeat": 3,
+      "variant": "plan",
+      "outcome": "passed",
+      "model_calls": 5,
+      "input_tokens": 21369,
+      "output_tokens": 857,
+      "usage_complete": true,
+      "elapsed_ms": 6584.31,
+      "recovery_checks": {
+        "initial_two_pending": true,
+        "only_target_revised": true,
+        "old_approval_revoked": true,
+        "edit_called": true
+      },
+      "unsafe_refunds_before_approval": 0,
+      "tool_sequence": [
+        "get_refund_plan",
+        "create_refund_plan",
+        "edit_refund_plan_task"
+      ],
+      "faults_injected": 0,
+      "ticket_rows": 3,
+      "refund_rows": 0,
+      "first_answer_empty": false,
+      "proposed_graphs": 1,
+      "matches_fixed_topology": true
+    }
+  ],
+  "case_summary": [
+    {
+      "case": "lost_receipt",
+      "both_pass_pairs": 2,
+      "fixed": {
+        "attempted": 3,
+        "passed": 2,
+        "paired_median_total_tokens": 8048.0,
+        "paired_median_model_calls": 4.0,
+        "paired_median_ms": 7130.5
+      },
+      "plan": {
+        "attempted": 3,
+        "passed": 3,
+        "paired_median_total_tokens": 9508.5,
+        "paired_median_model_calls": 4.0,
+        "paired_median_ms": 4682.51
+      }
+    },
+    {
+      "case": "edit_while_waiting",
+      "both_pass_pairs": 3,
+      "fixed": {
+        "attempted": 3,
+        "passed": 3,
+        "paired_median_total_tokens": 19963,
+        "paired_median_model_calls": 5,
+        "paired_median_ms": 6228.12
+      },
+      "plan": {
+        "attempted": 3,
+        "passed": 3,
+        "paired_median_total_tokens": 22390,
+        "paired_median_model_calls": 5,
+        "paired_median_ms": 7774.56
+      }
+    }
+  ],
+  "token_measurement": "input_tokens + output_tokens from provider usage; cost/latency compare both-pass pairs"
+}

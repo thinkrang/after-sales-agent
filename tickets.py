@@ -156,6 +156,8 @@ def init_tickets_table() -> None:
         init_plan_schema(conn)
         from voucher_disputes import init_schema as init_voucher_schema
         init_voucher_schema(conn)
+        from mixed_voucher import init_schema as init_mixed_schema
+        init_mixed_schema(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ticket_thread ON refund_tickets(thread_id)"
         )

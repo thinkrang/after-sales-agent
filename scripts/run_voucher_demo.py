@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -57,7 +57,7 @@ for (const button of document.querySelectorAll("button")) {
 </script></html>"""
 
 
-def build_app(port, key):
+def build_app(port, key, *, mixed=False):
     from typing import Literal
 
     from fastapi import FastAPI, HTTPException
@@ -83,6 +83,8 @@ def build_app(port, key):
 
     @app.get("/", response_class=HTMLResponse)
     def home():
+        if mixed:
+            return FileResponse(ROOT / "scripts" / "mixed_demo.html")
         return PAGE
 
     @app.get("/voucher-center")
@@ -116,19 +118,23 @@ def build_app(port, key):
             "Content-Type": "application/json", "X-Voucher-Timestamp": stamp, "X-Voucher-Signature": signature,
         })
         try:
-            with urlopen(req, timeout=5) as response:
+            with build_opener(ProxyHandler({})).open(req, timeout=5) as response:
                 return json.load(response)
         except HTTPError as exc:
             raise HTTPException(exc.code, "演示回调被拒绝") from exc
         except OSError as exc:
             raise HTTPException(502, "无法连接本地演示回调") from exc
 
+    if mixed:
+        from scripts.mixed_demo import install
+        install(app)
     return app
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--mixed", action="store_true", help="Run the offline mixed-task browser replay")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error("--port must be between 1024 and 65535")
@@ -138,6 +144,8 @@ def main():
         key = secrets.token_urlsafe(32)
         os.environ.update(AGENT_DATA_DIR=folder, AUTH_SECRET=secrets.token_urlsafe(32),
                           VOUCHER_MERCHANT_KEYS=json.dumps({"acme": key}))
+        if args.mixed:
+            os.environ.update(LANGSMITH_TRACING="false", LANGCHAIN_TRACING_V2="false")
         import db
         import tickets
         import voucher_disputes as disputes
@@ -145,7 +153,10 @@ def main():
         try:
             tickets.init_tickets_table()
             disputes.seed_demo()
-            app = build_app(args.port, key)
+            if args.mixed:
+                import orders
+                orders.init_order_db()
+            app = build_app(args.port, key, mixed=args.mixed)
             uvicorn.run(app, host="127.0.0.1", port=args.port)
         finally:
             db.release_all()

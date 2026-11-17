@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>混合售后任务 · 离线回放</title>
+  <style>
+    :root { color-scheme: light dark; --accent: #276e62; --line: color-mix(in srgb, CanvasText 16%, Canvas); }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: CanvasText; background: Canvas; font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 930px; margin: auto; padding: 28px clamp(16px, 5vw, 40px) 56px; }
+    h1 { font-size: clamp(27px, 4vw, 40px); margin: 0 0 6px; line-height: 1.2; }
+    h2 { font-size: 18px; margin: 0 0 10px; }
+    p { margin: 6px 0; }
+    code { overflow-wrap: anywhere; }
+    .mode { color: GrayText; }
+    .request { margin: 20px 0; padding: 10px 16px; border-left: 3px solid var(--accent); }
+    .branches { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+    article, section { border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    section { margin-top: 18px; }
+    button { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+    button[data-active="true"] { background: var(--accent); border-color: var(--accent); color: white; }
+    button:disabled { opacity: .56; cursor: default; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    #notice { min-height: 26px; margin-top: 10px; }
+    #notice[data-error="true"] { color: #bb4439; }
+    .value { font-weight: 650; }
+    .tool { padding: 6px 0 6px 16px; }
+    details { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+    summary { cursor: pointer; }
+    pre { overflow: auto; max-height: 320px; border-radius: 8px; padding: 12px; background: color-mix(in srgb, CanvasText 8%, Canvas); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>混合售后任务</h1>
+    <p class="mode">脚本模型回放 · 本机临时数据</p>
+  </header>
+  <p class="request">V200 在中心店用不了。A300 尺码不合适，请申请退款。</p>
+  <div class="branches">
+    <article>
+      <h2>V200 团购券</h2>
+      <p id="voucher-status" class="value">等待发起</p>
+      <p id="voucher-note"></p>
+      <a id="workbench" target="_blank" rel="noopener" hidden>打开团购券工作台</a>
+    </article>
+    <article>
+      <h2>A300 退款</h2>
+      <p id="refund-status" class="value">等待发起</p>
+      <p id="ticket-row" hidden>工单号 <code id="ticket"></code></p>
+    </article>
+  </div>
+  <section>
+    <h2>演示操作</h2>
+    <div class="actions">
+      <button data-step="start" disabled>发起混合请求</button>
+      <button data-step="arrival" disabled>补充到店时间</button>
+      <button data-step="submit" disabled>确认提交争议</button>
+      <button data-step="refresh" disabled>补传流水并刷新</button>
+    </div>
+    <p id="notice" role="status" aria-live="polite">正在读取演示状态</p>
+  </section>
+  <section id="trace-section" hidden>
+    <h2>执行轨迹</h2>
+    <div id="trace"></div>
+  </section>
+</main>
+<script>
+  const byId = id => document.getElementById(id);
+  const buttons = [...document.querySelectorAll("button[data-step]")];
+  const statuses = {
+    ask_visit: "等待补充到店时间", guide_dispute: "资料齐全，可以提交争议",
+    wait_review: "已提交，待人工复核", report_review: "已出复核结论"
+  };
+  const labels = {
+    start: "发起混合请求", arrival: "补充到店时间",
+    submit: "确认提交争议", refresh: "补传流水并刷新"
+  };
+  let state;
+
+  async function request(path, body) {
+    const response = await fetch(path, body ? {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
+    } : undefined);
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "操作失败");
+    return data;
+  }
+
+  function element(tag, text) {
+    const node = document.createElement(tag);
+    node.textContent = text;
+    return node;
+  }
+
+  function render() {
+    const voucher = state.voucher;
+    const refund = state.refund;
+    byId("voucher-status").textContent = voucher?.needs_recheck ? "证据已更新，旧结论待刷新"
+      : (statuses[voucher?.decision] || "等待发起");
+    byId("voucher-note").textContent = voucher?.redemption_finding || "";
+    byId("refund-status").textContent = refund.status === "pending_approval" ? "待本人确认" : "等待发起";
+    byId("ticket").textContent = refund.ticket_id || "";
+    byId("ticket-row").hidden = !refund.ticket_id;
+    const link = byId("workbench");
+    link.hidden = !voucher || !(voucher.visit_at || voucher.case_id);
+    if (!link.hidden) link.href = voucher.help_url;
+    byId("trace-section").hidden = !state.trace.length;
+    byId("trace").replaceChildren(...state.trace.map((turn, i, turns) => {
+      const details = document.createElement("details");
+      details.open = i === turns.length - 1;
+      details.append(element("summary", labels[turn.action]));
+      details.append(element("p", turn.message), element("p", turn.answer));
+      for (const tool of turn.tools) {
+        const row = document.createElement("details");
+        row.className = "tool";
+        const suffix = tool.code ? " · " + tool.code : "";
+        row.append(element("summary", tool.name + suffix), element("pre", JSON.stringify(tool.result, null, 2)));
+        details.append(row);
+      }
+      return details;
+    }));
+    for (const button of buttons) {
+      const enabled = button.dataset.step === state.next;
+      button.disabled = !enabled;
+      button.dataset.active = String(enabled);
+    }
+  }
+
+  function notice(text, error = false) {
+    byId("notice").textContent = text;
+    byId("notice").dataset.error = String(error);
+  }
+
+  for (const button of buttons) {
+    button.addEventListener("click", async () => {
+      for (const item of buttons) item.disabled = true;
+      const action = button.dataset.step;
+      notice("处理中…");
+      try {
+        if (action === "refresh") await request("/demo/evidence", {event: "late"});
+        state = await request("/demo/mixed", {action});
+        notice(state.next ? state.trace.at(-1).answer : "回放结束。A300 的待确认工单保持原样。");
+      } catch (error) {
+        notice(error.message, true);
+        state = await request("/demo/mixed").catch(() => state);
+      }
+      if (state) render();
+    });
+  }
+
+  async function load() {
+    try {
+      const login = await request("/demo/login", {identity: "customer"});
+      localStorage.setItem("after_sales_access_token", login.access_token);
+      state = await request("/demo/mixed");
+      render();
+      notice(state.next ? "请选择可用操作。" : "本次回放已结束；重启本机服务可重新开始。");
+    } catch (error) { notice(error.message, true); }
+  }
+  load();
+</script>
+</body>
+</html>

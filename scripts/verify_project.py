@@ -92,6 +92,7 @@ def main():
     run("replanning", py + ["scripts/compare_replanning.py", "--repeat", "10",
                              "--output", str(run_dir / "replanning.json")])
     run("voucher-replay", py + ["scripts/replay_voucher_policy.py", "--output-dir", str(run_dir / "voucher-replay")])
+    run("mixed-cases", py + ["mixed_eval.py", "--output", str(run_dir / "mixed-cases.json")])
     # 用新建的干净索引做权重实验；测试写入的上传样本不能改变评测语料。
     run("refresh-index", py + ["-c", "import rag; rag.build_index()"])
     run("rrf", py + ["tune_rrf.py", "--holdout", "--output", str(run_dir / "rrf.json")])

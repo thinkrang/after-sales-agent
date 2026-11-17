@@ -196,6 +196,28 @@ def inspect_visit(user: User, voucher_id: str, store_code: str | None, visit_at:
         return dict(assessment, visit=_visit(conn, user.tenant_id, assessment, store_code, visit_at or now))
 
 
+def workflow_source(conn, user: User, voucher_id: str) -> tuple[dict, dict | None, dict]:
+    """Read ownership and the upstream revisions in the caller's transaction."""
+    voucher = _voucher(conn, user, voucher_id)
+    source = conn.execute("""SELECT MAX(source_version) FROM voucher_merchant_events
+        WHERE tenant_id=? AND voucher_id=? AND status='applied'""", (user.tenant_id, voucher_id)).fetchone()
+    case = conn.execute("""SELECT * FROM voucher_disputes
+        WHERE tenant_id=? AND owner_id=? AND voucher_id=?""",
+        (user.tenant_id, user.username, voucher_id)).fetchone()
+    version = {"merchant": source[0] or 0, "case": case["revision"] if case else None,
+               "policy": voucher["policy_version"], "expired": parse_aware_datetime(voucher["expires_at"]) <= _now()}
+    return voucher, _item(case) if case else None, version
+
+
+def observe_for_plan(conn, user: User, voucher: dict, store_code: str | None, visit_at: datetime | None) -> dict:
+    now = _now()
+    assessment = _assessment(conn, user.tenant_id, voucher, now)
+    visit = _visit(conn, user.tenant_id, assessment, store_code, visit_at) if store_code and visit_at else None
+    if visit and store_code != "OTHER" and not any(item["code"] == store_code for item in visit["stores"]):
+        raise ValueError("到店门店与该券可核查的门店不匹配")
+    return {"reason_code": assessment["reason_code"], "visit_step": visit["next_step"] if visit else None}
+
+
 def _item(row):
     item = dict(row)
     item["assessment"] = json.loads(item["assessment"])

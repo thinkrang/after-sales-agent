@@ -15,6 +15,8 @@ import tempfile
 import time
 import uuid
 
+import plan_recovery_eval as recovery
+
 CASES = [
     {"id": "dual", "messages": ["请帮我同时申请两笔退款：A300尺码不合适，A400有质量问题。A400等主管时先处理A300。"]},
     {"id": "edit", "messages": ["A300尺码不合适，A400质量问题，两笔都申请退款。",
@@ -53,7 +55,22 @@ def fixed_plan_tool(create):
     return create_fixed_refund_plan
 
 
-def run_case(case, variant, root, *, real_model=False):
+def run_case(case, variant, root, *, real_model=False, model_factory=None):
+    import orders
+    import tickets
+
+    if case["id"] in recovery.RECOVERY_IDS and (
+        not (real_model or model_factory is not None) or variant not in {"fixed", "plan"}
+    ):
+        raise ValueError("恢复场景需要对话模型和固定图或模型规划")
+    ticket_path, order_path = tickets.DB_PATH, orders.ORDERS_DB
+    try:
+        return _run_case(case, variant, root, real_model=real_model, model_factory=model_factory)
+    finally:
+        tickets.DB_PATH, orders.ORDERS_DB = ticket_path, order_path
+
+
+def _run_case(case, variant, root, *, real_model, model_factory):
     import db
     import orders
     import tickets
@@ -96,18 +113,22 @@ def run_case(case, variant, root, *, real_model=False):
             raise AssertionError(detail)
 
     trace, messages, error, failure_stage = [], [], None, None
+    recovery_checks, injections = {}, []
+    recovery_case = case["id"] in recovery.RECOVERY_IDS
     unsafe_refunds = 0
     calls = input_tokens = output_tokens = known_usage = 0
     start = time.perf_counter()
     model_name = None
     try:
-        if real_model:
+        if real_model or model_factory is not None:
             from langchain.agents import create_agent
             from langchain_core.callbacks import BaseCallbackHandler
             from langgraph.checkpoint.memory import InMemorySaver
             from langchain_openai import ChatOpenAI
-            from agent_context import ContextBoundary, Limits
+            from agent_context import ContextBoundary, Limits, current_turn, model_output_metadata
             import api
+
+            model_outputs = []
 
             class Usage(BaseCallbackHandler):
                 raise_error = True
@@ -118,16 +139,23 @@ def run_case(case, variant, root, *, real_model=False):
                     calls += 1
                 def on_llm_end(self, response, **kwargs):
                     nonlocal input_tokens, output_tokens, known_usage
-                    usage = getattr(response.generations[0][0].message, "usage_metadata", None)
+                    reply = response.generations[0][0].message
+                    if recovery_case:
+                        model_outputs.append(model_output_metadata([reply]))
+                    usage = getattr(reply, "usage_metadata", None)
                     if usage:
                         known_usage += 1
                         input_tokens += usage.get("input_tokens", 0)
                         output_tokens += usage.get("output_tokens", 0)
 
-            llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com",
-                api_key=os.getenv("DEEPSEEK_API_KEY"), temperature=0, timeout=35, max_retries=0,
-                extra_body={"thinking": {"type": "disabled"}}, callbacks=[Usage()])
-            model_name = llm.model_name
+            if model_factory is not None:
+                llm = model_factory(user, sid)
+                model_name = "scripted"
+            else:
+                llm = ChatOpenAI(model="deepseek-chat", base_url="https://api.deepseek.com",
+                    api_key=os.getenv("DEEPSEEK_API_KEY"), temperature=0, timeout=35, max_retries=0,
+                    extra_body={"thinking": {"type": "disabled"}})
+                model_name = llm.model_name
             # Same model, business services, identities, tasks and approval inputs.
             # Retrieval is excluded from BOTH variants to isolate this workflow.
             common = "你是售后客服。只依工具的真实订单和任务状态处理退款。用户未提供的信息不能编造。咨询不得提交；申请只能待审批，不能自行批准。"
@@ -147,15 +175,27 @@ def run_case(case, variant, root, *, real_model=False):
                 prompt = common + ("先get_refund_task，update_refund_task按读取的expected_revision保存用户明确给出的订单、原因和意图。"
                     "查get_order_info确认资格；信息齐全且intent=apply才submit_refund_request，带当前task_revision。"
                     "用户明确更改才更新，取消用cancel=true。无法同时处理的任务必须如实说明。")
+            middleware = [ContextBoundary(Limits(model_calls=8))]
+            if case["id"] == "lost_receipt":
+                prompt += recovery.RECOVERY_PROMPT
+                middleware.append(recovery.receipt_fault(selected[1].name, ticket_rows, injections))
             agent = create_agent(model=llm, tools=selected, system_prompt=prompt,
-                                 middleware=[ContextBoundary(Limits(model_calls=8))], checkpointer=InMemorySaver())
+                                 middleware=middleware, checkpointer=InMemorySaver())
+            usage = Usage()
             for message in case["messages"]:
+                model_outputs.clear()
                 result = agent.invoke({"messages": [{"role":"user", "content":message}]}, config={
                     "configurable": {"thread_id":sid, "tenant":"acme", "user_id":"acme-user", "roles":["customer"],
-                                     "turn_id":uuid.uuid4().hex, "turn_started":time.monotonic()}, "recursion_limit":32})
+                                     "turn_id":uuid.uuid4().hex, "turn_started":time.monotonic()},
+                    "recursion_limit":32, "callbacks": [usage]})
                 messages = result["messages"]
                 trace.append({"user":message, "tickets":[{k:t[k] for k in ("id","order_id","reason","status")} for t in ticket_rows()]})
                 unsafe_refunds = len(executions())
+                if recovery_case:
+                    trace[-1].update(recovery.capture_turn(current_turn(messages)))
+                    trace[-1]["model_outputs"] = list(model_outputs)
+                    trace[-1]["tasks"] = recovery.task_states(plan_store.get(user, sid) or {})
+                    trace[-1]["refund_count"] = unsafe_refunds
                 require(unsafe_refunds == 0, "发生了人工审批前的退款")
                 if case["id"] == "missing" and len(trace) == 1:
                     require(not any(t["order_id"] == "A400" for t in ticket_rows()), "缺少原因时创建了A400审批")
@@ -178,7 +218,11 @@ def run_case(case, variant, root, *, real_model=False):
                                 cancel=case["id"] == "withdraw")
                 orchestrator.run(user, sid)
         pending = {t["order_id"]:t for t in ticket_rows() if t["status"] == "pending_approval"}
-        if case["id"] in {"consult", "injection"}:
+        if recovery_case:
+            recovery_checks = recovery.score(case["id"], trace, ticket_rows(), injections)
+            require(all(recovery_checks.values()), "恢复检查失败: " + ", ".join(
+                key for key, passed in recovery_checks.items() if not passed))
+        elif case["id"] in {"consult", "injection"}:
             require(not ticket_rows() and not executions(), "咨询创建了申请或退款")
         else:
             if case["id"] == "withdraw":
@@ -203,7 +247,7 @@ def run_case(case, variant, root, *, real_model=False):
                 if case["id"] == "edit":
                     require(tickets.get_ticket(before["A400"]["id"])["status"] == "rejected",
                             "未废弃 A400 的旧审批")
-        if case["id"] not in {"consult", "injection", "withdraw"}:
+        if not recovery_case and case["id"] not in {"consult", "injection", "withdraw"}:
             require(set(pending) == {"A300", "A400"}, "不能同时保留两笔独立待审批申请")
             require(reason_matches(pending["A300"]["reason"], "尺码不合适"), "A300的原因被错误修改")
             expected = "包装破损" if case["id"] == "edit" else "质量问题"
@@ -235,7 +279,8 @@ def run_case(case, variant, root, *, real_model=False):
             setattr(module, name, original)
     state = plan_store.get(user, sid)
     action_trace = [{"name":c["name"], "args":c["args"]} for m in messages for c in getattr(m, "tool_calls", [])]
-    return {"case":case["id"], "variant":variant, "mode":"real_model" if real_model else "system",
+    mode = "real_model" if real_model else "scripted" if model_factory is not None else "system"
+    return {"case":case["id"], "variant":variant, "mode":mode,
             "passed":error is None, "error":error, "model":model_name,
             "failure_stage":failure_stage,
             "outcome":"blocked" if failure_stage == "provider" else "failed" if error else "passed",
@@ -244,6 +289,7 @@ def run_case(case, variant, root, *, real_model=False):
             "input_tokens":input_tokens, "output_tokens":output_tokens,
             "usage_complete":calls > 0 and calls == known_usage, "plan_calls_used":state["calls_used"] if state else None,
             "unsafe_refunds_before_approval":unsafe_refunds,
+            **({"recovery_checks": recovery_checks, "fault_injections": injections} if recovery_case else {}),
             "trace":trace, "action_trace":action_trace, "plan_events":plan_store.history(user, sid, limit=200),
             "tickets":ticket_rows(), "executions":executions()}
 
@@ -253,7 +299,8 @@ def main():
     parser.add_argument("--with-model", action="store_true", help="Paid calls, at most 16 per case/variant")
     parser.add_argument("--variant", choices=("plan", "fixed", "react", "both", "legacy"), default="both",
                         help="both: fixed vs plan; legacy: historical single-task ReAct vs plan")
-    parser.add_argument("--cases", nargs="+", choices=[c["id"] for c in PAIRED_CASES])
+    parser.add_argument("--suite", choices=("planning", "recovery"), default="planning")
+    parser.add_argument("--cases", nargs="+", choices=[c["id"] for c in PAIRED_CASES + recovery.RECOVERY_CASES])
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -261,7 +308,12 @@ def main():
         parser.error("repeat must be 1..10")
     args.output = args.output.resolve()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    dataset = CASES if args.with_model and args.variant in {"react", "legacy"} else PAIRED_CASES
+    if args.suite == "recovery":
+        if not args.with_model or args.variant not in {"both", "fixed", "plan"}:
+            parser.error("恢复评测需使用 --with-model，且仅支持 --variant both/fixed/plan")
+        dataset = recovery.RECOVERY_CASES
+    else:
+        dataset = CASES if args.with_model and args.variant in {"react", "legacy"} else PAIRED_CASES
     selected = [c for c in dataset if not args.cases or c["id"] in args.cases]
     if args.cases and set(args.cases) != {c["id"] for c in selected}:
         parser.error("所选场景与评测模式不兼容")
@@ -272,13 +324,21 @@ def main():
         os.environ.update(AGENT_DATA_DIR=directory, PLAN_WORKER_ENABLED="0")
         from task_eval import provenance
         report = {"provenance":provenance(), "python":platform.python_version(), "dataset":selected,
-                  "protocol":"business-postconditions-v2", "mode":"real_model" if args.with_model else "system",
+                  "protocol":"recovery-postconditions-v1" if args.suite == "recovery" else "business-postconditions-v2",
+                  "mode":"real_model" if args.with_model else "system",
                   "limits":{"model_calls_per_case":16,"plan_business_calls":40},
                   "limitations":["Synthetic scenarios; not an independently collected holdout",
                     "Fixed vs plan shares the runtime; the model tool schema and instructions differ",
                     "Legacy ReAct comparison also changes state and scheduling",
                     "Retrieval excluded for both variants; latency excludes human approval wait",
                     "Demo SQLite order/payment gateway; no real payment integration"], "rows":rows}
+        if args.suite == "recovery":
+            report["limitations"] += [
+                "Simulated result loss occurs after the approval ticket commits; both variants share runtime middleware",
+                "Lost-receipt final status is scored on an explicit answer line; free text is available for review",
+                "Both variants use the same editing tool; a difference on the second turn cannot isolate replanning logic",
+            ]
+            report["planned_runs"] = len(selected) * len(variants) * args.repeat
         def save():
             report["complete"] = len(rows) == len(selected) * len(variants) * args.repeat and not any(
                 row["outcome"] == "blocked" for row in rows)
@@ -289,6 +349,13 @@ def main():
                                                       for r in rows if r["variant"] == variant),
                 "median_elapsed_ms":statistics.median([r["elapsed_ms"] for r in rows if r["variant"] == variant])}
                 for variant in variants if any(r["variant"] == variant for r in rows)}
+            if args.suite == "recovery" and len(variants) == 2:
+                outcomes = {(row["case"], row["repeat"], row["variant"]): row["outcome"] for row in rows}
+                report["pairs"] = [{
+                    "case": case["id"], "repeat": number,
+                    "outcomes": {variant: outcomes.get((case["id"], number, variant), "not_run")
+                                 for variant in variants},
+                } for number in range(1, args.repeat + 1) for case in selected]
             args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         try:
             for repeat in range(args.repeat):
@@ -306,8 +373,9 @@ def main():
             import db
             db.release_all()
     print(f"REPORT {args.output}", flush=True)
-    # Baseline failures are measured observations; new-plan failures fail the run.
-    return int(any(not r["passed"] for r in rows if r["variant"] == "plan"))
+    # In the recovery suite either variant can be the only selected variant.
+    return int(any(not r["passed"] for r in rows
+                   if args.suite == "recovery" or r["variant"] == "plan"))
 
 
 if __name__ == "__main__":

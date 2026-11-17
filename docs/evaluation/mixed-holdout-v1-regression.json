@@ -1,0 +1,119 @@
+{
+  "dataset_sha256": "b2fa9884c8696db66639bf4aa7db6167cb8114ec7dde12e3035cdd29296084ed",
+  "dataset": "mixed-after-sales-holdout-v1",
+  "mode": "regression_on_original_holdout",
+  "comparison": [
+    {
+      "label": "first_holdout",
+      "raw_report_sha256": "c8f666cdbe30913d661e2d5a2767a18d6cbc5095a49580c0c91e5eb76d33a971",
+      "source": {
+        "commit": "2976c3f085e5f340f61e1f7a4ec674074734e3d7",
+        "dirty": true,
+        "source_sha256": "831e000f31d457334d5fe19c34aa94f543da754165d551fc1264de720fe688f7"
+      },
+      "prompt_sha256": "873572ec42c2f055330c2767b5abf57d556acb9a793a131f8194402b9e4327a1",
+      "model": "deepseek-chat",
+      "scenario_count": 8,
+      "business_passed_scenarios": 6,
+      "turn_count": 13,
+      "business_passed_turns": 10,
+      "calls": 56,
+      "calls_with_usage": 56,
+      "input_tokens": 139573,
+      "output_tokens": 6592,
+      "approval_free_executions": 0,
+      "outcomes": {
+        "ambiguous_order": false,
+        "switch_order": true,
+        "withdraw_with_visit": true,
+        "merchant_evidence": true,
+        "review_is_not_refund": true,
+        "order_read_timeout": true,
+        "foreign_order": true,
+        "refund_receipt_lost": false
+      }
+    },
+    {
+      "label": "contract_only_regression",
+      "raw_report_sha256": "2d4b97eee540bac498e0523df2c70c739f4e46b09686379cb0c8d9f86d2529b2",
+      "source": {
+        "commit": "2976c3f085e5f340f61e1f7a4ec674074734e3d7",
+        "dirty": true,
+        "source_sha256": "38151b51420fdf698e528981aa882f43512de223ffb343485bca8bc931d01cc1"
+      },
+      "prompt_sha256": "b7a16c7c9ab2dd0e55658a3f806747a868e5f8597d6f201584603cdd941315ff",
+      "model": "deepseek-chat",
+      "scenario_count": 8,
+      "business_passed_scenarios": 7,
+      "turn_count": 13,
+      "business_passed_turns": 11,
+      "calls": 55,
+      "calls_with_usage": 55,
+      "input_tokens": 132346,
+      "output_tokens": 6365,
+      "approval_free_executions": 0,
+      "outcomes": {
+        "ambiguous_order": false,
+        "switch_order": true,
+        "withdraw_with_visit": true,
+        "merchant_evidence": true,
+        "review_is_not_refund": true,
+        "order_read_timeout": true,
+        "foreign_order": true,
+        "refund_receipt_lost": true
+      }
+    },
+    {
+      "label": "contract_final_regression",
+      "raw_report_sha256": "a0285cbbc0dc252ec12abcb2bc5b4d3a51b866ab760f958f717fa5b8492cebdf",
+      "source": {
+        "commit": "2976c3f085e5f340f61e1f7a4ec674074734e3d7",
+        "dirty": true,
+        "source_sha256": "f2833c6b20f8c8d365f5449f9fd3c30984e7a0791fdc47684fa2c2efcf7a3113"
+      },
+      "prompt_sha256": "2962e837acaf576dd88b15d2c6c77c2904c160b26ac5e106b6ed2839cb8f12f8",
+      "model": "deepseek-chat",
+      "scenario_count": 8,
+      "business_passed_scenarios": 8,
+      "turn_count": 13,
+      "business_passed_turns": 13,
+      "calls": 56,
+      "calls_with_usage": 56,
+      "input_tokens": 135350,
+      "output_tokens": 6456,
+      "approval_free_executions": 0,
+      "outcomes": {
+        "ambiguous_order": true,
+        "switch_order": true,
+        "withdraw_with_visit": true,
+        "merchant_evidence": true,
+        "review_is_not_refund": true,
+        "order_read_timeout": true,
+        "foreign_order": true,
+        "refund_receipt_lost": true
+      }
+    }
+  ],
+  "manual_final_audit": {
+    "previous_state_or_evidence_errors_repeated": 0,
+    "previous_state_or_evidence_errors_checked": 5,
+    "v300_unnecessary_questions": 0,
+    "remaining_guidance_issues": [
+      {
+        "case": "merchant_evidence",
+        "turns": [
+          1,
+          2
+        ],
+        "detail": "已存在待复核争议，回复仍把查看进展入口描述成也需要确认提交。"
+      },
+      {
+        "case": "review_is_not_refund",
+        "turns": [
+          2
+        ],
+        "detail": "正确说明联系售后后，又附带提出可在聊天登记，容易被理解为可代办券退款。"
+      }
+    ]
+  }
+}

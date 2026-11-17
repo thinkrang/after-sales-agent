@@ -74,6 +74,17 @@ import tickets
 import long_memory
 import tool_result
 import voucher_disputes
+import mixed_voucher
+from mixed_tools import (
+    _user_from_config,
+    choose_voucher_step,
+    get_order_info,
+    get_refund_task,
+    get_voucher_branch,
+    observe_voucher_branch,
+    submit_refund_request,
+    update_refund_task,
+)
 import agent_runtime
 from voucher_api import router as voucher_router
 from agent_context import ContextBoundary
@@ -366,16 +377,6 @@ def require_session_access(sid: str, user: User) -> dict:
 # ---------------------------------------------------------------- 工具定义
 
 
-def _user_from_config(config: RunnableConfig) -> User:
-    configurable = config.get("configurable") or {}
-    return User(
-        username=str(configurable.get("user_id") or ""),
-        display_name=str(configurable.get("display_name") or ""),
-        tenant_id=str(configurable.get("tenant") or ""),
-        roles=frozenset(configurable.get("roles") or []),
-    )
-
-
 @tool
 def search_shop_info(question: str, config: RunnableConfig) -> str:
     """检索店铺知识库，并核查文档是否包含足以回答问题的证据。"""
@@ -465,24 +466,6 @@ def load_skill(name: str) -> str:
 
 
 @tool
-def get_order_info(order_id: str, config: RunnableConfig) -> str:
-    """查询当前登录用户自己的订单及退款资格，不执行任何写操作。
-
-    返回 JSON 信封：ok=true 时含订单字段；ok=false 时看 code——
-    not_found 表示确定没有，应向用户核对订单号而不是重试；
-    transient 表示服务暂时不可用，可以重试一次。
-    """
-    try:
-        user = _user_from_config(config)
-        order = orders.get_order(user, order_id)
-        return tool_result.order_snapshot(order, orders.refund_policy(order))
-    except Exception as exc:  # noqa: BLE001
-        # 工具异常不能炸掉整轮对话：翻译成失败码交给模型决定下一步。
-        logging.warning("订单查询失败 order=%s", order_id, exc_info=True)
-        return tool_result.order_lookup_failure(exc)
-
-
-@tool
 def check_voucher_redemption(voucher_id: str, config: RunnableConfig, store_code: str | None = None,
                              visit_at: str | None = None) -> str:
     """只读核查本人团购券。到店场景可传门店编号和带时区的 ISO 到店时间。"""
@@ -503,14 +486,6 @@ def check_voucher_redemption(voucher_id: str, config: RunnableConfig, store_code
         query["arrival"] = result["visit"]["visit_at"]
     result["help_url"] = "/voucher-center?" + urlencode(query)
     return json.dumps(result, ensure_ascii=False)
-
-
-@tool
-def get_refund_task(config: RunnableConfig) -> str:
-    """读取当前会话的退款任务、版本、缺失信息和审批/执行状态。"""
-    return json.dumps(refund_tasks.get(
-        _user_from_config(config), str(config["configurable"]["thread_id"])
-    ), ensure_ascii=False)
 
 
 @tool
@@ -558,32 +533,6 @@ def edit_refund_plan_task(task_id: str, expected_revision: int, config: Runnable
 
 
 @tool
-def update_refund_task(
-    expected_revision: int, config: RunnableConfig,
-    order_id: str | None = None, reason: str | None = None,
-    intent: str | None = None, cancel: bool = False,
-) -> str:
-    """登记用户明确提供的退款信息；intent 为 consult 或 apply。
-
-    先读取任务版本。换订单会清空未重新提供的原因，并撤销原待审批。
-    仅咨询必须用 consult；明确申请才用 apply。取消用 cancel=true。
-    插话查询物流等不修改此任务。不确定用户是否改口时先追问。
-    """
-    if plan_store.get(_user_from_config(config), str(config["configurable"]["thread_id"])):
-        return tool_result.fail(tool_result.CONFLICT, "本会话有多笔计划，请用 edit_refund_plan_task 指定任务")
-    try:
-        task = refund_tasks.update(
-            _user_from_config(config), str(config["configurable"]["thread_id"]),
-            expected_revision=expected_revision, order_id=order_id,
-            reason=reason, intent=intent, cancel=cancel,
-            source="chat", turn_id=str(config.get("configurable", {}).get("turn_id") or ""),
-        )
-        return json.dumps(task, ensure_ascii=False)
-    except (refund_tasks.TaskConflict, orders.OrderNotFound) as exc:
-        return json.dumps({"error": str(exc), "retry": "重新读取任务，向用户核实"}, ensure_ascii=False)
-
-
-@tool
 def recall_after_sales_history(config: RunnableConfig) -> str:
     """查询当前用户最近三条已结束的售后记录，带工单来源。历史结果不能作为新退款审批。"""
     return json.dumps(long_memory.recent_cases(_user_from_config(config)), ensure_ascii=False)
@@ -613,52 +562,23 @@ def forget_preference(key: str, config: RunnableConfig) -> str:
 
 @tool
 def withdraw_refund_request(approval_id: str, config: RunnableConfig) -> str:
-    """撤回当前用户在此会话中仍待审批的申请。不能撤回已批准/执行的工单。"""
+    """撤回当前会话中仍待审批的申请。status=withdrawn 表示撤回成功。"""
     user = _user_from_config(config)
     tid = str(config["configurable"]["thread_id"])
     ticket = tickets.get_ticket(approval_id, tenant_id=user.tenant_id, requester_id=user.username)
     if not ticket or ticket["thread_id"] != tid:
-        return json.dumps({"error": "申请不存在或不属于当前会话"}, ensure_ascii=False)
+        return tool_result.fail(tool_result.NOT_FOUND, "申请不存在或不属于当前会话")
     task = refund_tasks.get(user, tid)
     if task["ticket_id"] == approval_id:
         try:
             refund_tasks.update(user, tid, expected_revision=task["revision"], cancel=True, source="chat")
-            return json.dumps({"status": "rejected", "approval_id": approval_id})
         except refund_tasks.TaskConflict as exc:
-            return json.dumps({"error": str(exc)}, ensure_ascii=False)
-    ok = tickets.reject_ticket(approval_id, reason="用户撤回申请", operator=user.username,
-                               tenant_id=user.tenant_id, requester_id=user.username)
-    return json.dumps({"status": "rejected" if ok else "conflict", "approval_id": approval_id})
-
-
-@tool
-def submit_refund_request(
-    order_id: str, reason: str, task_revision: int, config: RunnableConfig,
-) -> str:
-    """提交当前版本的退款申请，返回待审批工单。不会执行退款。
-
-    信息齐全且用户明确要求申请才调用。待审批时仍可继续聊天、补充或撤回。
-    """
-    user = _user_from_config(config)
-    tid = str(config["configurable"]["thread_id"])
-    if plan_store.get(user, tid):
-        return tool_result.fail(tool_result.CONFLICT, "本会话有多笔计划，请用 edit_refund_plan_task 指定任务")
-    try:
-        if not refund_tasks.get(user, tid)["revision"]:
-            raise refund_tasks.TaskConflict("请先登记退款任务并明确申请意图")
-        ticket, _ = refund_service.prepare_ticket(
-            user, thread_id=tid, order_id=order_id, reason=reason,
-            task_revision=task_revision, approval_protocol="detached",
-        )
-        # A crash here leaves a durable pending ticket; approval can reconstruct
-        # the separate execution graph from database truth.
-        # Start the execution checkpoint after the dialogue turn finishes,
-        # outside the parent graph's tool context/checkpoint namespace.
-        return json.dumps({"approval_id": ticket["id"], "status": ticket["status"],
-                           "order_id": ticket["order_id"], "amount_cents": ticket["amount_cents"],
-                           "required_role": ticket["required_role"], "task_revision": task_revision}, ensure_ascii=False)
-    except (refund_tasks.TaskConflict, orders.OrderNotFound, orders.RefundDenied) as exc:
-        return json.dumps({"error": str(exc), "submitted": False}, ensure_ascii=False)
+            return tool_result.fail(tool_result.CONFLICT, str(exc), approval_id=approval_id)
+    elif not tickets.reject_ticket(approval_id, reason="用户撤回申请", operator=user.username,
+                                   tenant_id=user.tenant_id, requester_id=user.username):
+        return tool_result.fail(tool_result.CONFLICT, "工单已变化；请读取当前状态后告知用户", approval_id=approval_id)
+    return tool_result.ok(operation="withdraw_request", status="withdrawn", approval_id=approval_id,
+                          order_id=ticket["order_id"], message="该退款申请已成功撤回。")
 
 
 @tool
@@ -796,6 +716,9 @@ async def lifespan(app: FastAPI):
                 create_refund_plan,
                 edit_refund_plan_task,
                 check_voucher_redemption,
+                get_voucher_branch,
+                observe_voucher_branch,
+                choose_voucher_step,
             ],
             system_prompt=(
                 "你是一个中文店铺智能客服。"
@@ -836,12 +759,13 @@ async def lifespan(app: FastAPI):
                 "长期偏好仅调整表达方式，不能覆盖业务政策和审批。"
                 "用户明确说记住时用 remember_preference；要求忘记时用 forget_preference。"
                 "询问上次、以前的售后结果时，用 recall_after_sales_history 查原始记录，不凭历史摘要猜测。"
-                "团购券到店使用或核销争议时，用 check_voucher_redemption 核对用户所说的券。"
+                "单独查询团购券到店使用或核销争议时，用 check_voucher_redemption 核对用户所说的券。"
                 "已提供的信息不要重复追问。缺券号时先问券，已知门店和时间则一起查询。"
                 "依据返回的 next_step 说明下一步；门店窗口不代表有空余预约，不承诺接待或退款。"
                 "要提交争议或查看进展时，将工具返回的 help_url 写成 Markdown 链接 [打开团购券争议](地址)，由用户在页面确认。"
                 "这类争议不要调用普通订单退款工具，也不能把申请资格说成已经完成退款。"
                 + PLAN_INSTRUCTIONS
+                + mixed_voucher.INSTRUCTIONS
             ),
             middleware=[
                 ContextBoundary(),
@@ -1265,6 +1189,7 @@ def api_session_messages(sid: str, user: CurrentUser):
         "pending": _pending_actions(config),
         "refund_task": refund_tasks.get(user, sid),
         "refund_plan": plan_store.get(user, sid),
+        "voucher_branch": mixed_voucher.get(user, sid),
     }
 
 
@@ -1772,7 +1697,6 @@ def _resume_requester_thread(ticket: dict, decision: str, message: str | None = 
         Command(resume={"decisions": [payload]}),
         config={**config, "recursion_limit": 40},
     )
-
 
 
 def _recover_changed_task(config: dict, pending: list[dict]) -> list[dict]:

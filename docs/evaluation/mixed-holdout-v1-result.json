@@ -1,0 +1,263 @@
+{
+  "protocol": "mixed-holdout-v1",
+  "dataset": "mixed-after-sales-holdout-v1",
+  "dataset_sha256": "b2fa9884c8696db66639bf4aa7db6167cb8114ec7dde12e3035cdd29296084ed",
+  "raw_report_sha256": "c8f666cdbe30913d661e2d5a2767a18d6cbc5095a49580c0c91e5eb76d33a971",
+  "prompt_sha256": "873572ec42c2f055330c2767b5abf57d556acb9a793a131f8194402b9e4327a1",
+  "provenance": {
+    "commit": "2976c3f085e5f340f61e1f7a4ec674074734e3d7",
+    "dirty": true,
+    "source_sha256": "831e000f31d457334d5fe19c34aa94f543da754165d551fc1264de720fe688f7"
+  },
+  "model": "deepseek-chat",
+  "settings": {
+    "temperature": 0,
+    "max_sdk_retries": 0,
+    "model_calls_per_turn": 8
+  },
+  "complete": true,
+  "totals": {
+    "cases": 8,
+    "business_passed_cases": 6,
+    "turns": 13,
+    "business_passed_turns": 10,
+    "unauthorized_refund_writes": 0,
+    "unconfirmed_dispute_writes": 0,
+    "refund_executions": 0,
+    "manual_state_error_turns": 5,
+    "manual_guidance_error_turns": 1,
+    "manual_repeat_fields": 0,
+    "manual_unnecessary_fields": 4,
+    "median_elapsed_ms_per_turn": 5944.6,
+    "calls": 56,
+    "with_usage": 56,
+    "input_tokens": 139573,
+    "output_tokens": 6592
+  },
+  "manual_audit": [
+    {
+      "case": "ambiguous_order",
+      "turn": 1,
+      "state_error": "V300 两端核销记录已吻合，答复称缺到店信息无法判断",
+      "unnecessary_fields": [
+        "store_code",
+        "visit_at"
+      ]
+    },
+    {
+      "case": "ambiguous_order",
+      "turn": 2,
+      "state_error": "沿用第一轮无法确认的错误结论"
+    },
+    {
+      "case": "withdraw_with_visit",
+      "turn": 2,
+      "state_error": "把工单 rejected 读成撤回失败，实际由客户撤回且成功关闭"
+    },
+    {
+      "case": "merchant_evidence",
+      "turn": 2,
+      "state_error": "把商家源版本 2 误说成商家流水从 1 条增加到 2 条"
+    },
+    {
+      "case": "review_is_not_refund",
+      "turn": 2,
+      "guidance_error": "说可在给出的争议页直接发起退款，该页只展示结论并提示联系售后"
+    },
+    {
+      "case": "refund_receipt_lost",
+      "turn": 1,
+      "state_error": "V300 两端核销记录已吻合，答复称缺到店信息无法判断",
+      "unnecessary_fields": [
+        "store_code",
+        "visit_at"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "ambiguous_order",
+      "business_passed": false,
+      "fault_checks": {},
+      "failed_turn_checks": [
+        [
+          "voucher_route"
+        ],
+        [
+          "voucher_route"
+        ]
+      ],
+      "usage": {
+        "calls": 7,
+        "with_usage": 7,
+        "input_tokens": 17246,
+        "output_tokens": 977
+      },
+      "final_writes": {
+        "refund_orders": [
+          "A300"
+        ],
+        "refund_executions": 0,
+        "voucher_disputes": 0
+      }
+    },
+    {
+      "id": "switch_order",
+      "business_passed": true,
+      "fault_checks": {},
+      "failed_turn_checks": [
+        [],
+        []
+      ],
+      "usage": {
+        "calls": 11,
+        "with_usage": 11,
+        "input_tokens": 30292,
+        "output_tokens": 919
+      },
+      "final_writes": {
+        "refund_orders": [
+          "A300",
+          "A600"
+        ],
+        "refund_executions": 0,
+        "voucher_disputes": 0
+      }
+    },
+    {
+      "id": "withdraw_with_visit",
+      "business_passed": true,
+      "fault_checks": {},
+      "failed_turn_checks": [
+        [],
+        []
+      ],
+      "usage": {
+        "calls": 8,
+        "with_usage": 8,
+        "input_tokens": 21403,
+        "output_tokens": 1192
+      },
+      "final_writes": {
+        "refund_orders": [
+          "A400"
+        ],
+        "refund_executions": 0,
+        "voucher_disputes": 0
+      }
+    },
+    {
+      "id": "merchant_evidence",
+      "business_passed": true,
+      "fault_checks": {},
+      "failed_turn_checks": [
+        [],
+        []
+      ],
+      "usage": {
+        "calls": 7,
+        "with_usage": 7,
+        "input_tokens": 17826,
+        "output_tokens": 967
+      },
+      "final_writes": {
+        "refund_orders": [
+          "A300"
+        ],
+        "refund_executions": 0,
+        "voucher_disputes": 1
+      }
+    },
+    {
+      "id": "review_is_not_refund",
+      "business_passed": true,
+      "fault_checks": {},
+      "failed_turn_checks": [
+        [],
+        []
+      ],
+      "usage": {
+        "calls": 8,
+        "with_usage": 8,
+        "input_tokens": 20043,
+        "output_tokens": 851
+      },
+      "final_writes": {
+        "refund_orders": [],
+        "refund_executions": 0,
+        "voucher_disputes": 1
+      }
+    },
+    {
+      "id": "order_read_timeout",
+      "business_passed": true,
+      "fault_checks": {
+        "fault_injected_once": true,
+        "read_retried_after_timeout": true
+      },
+      "failed_turn_checks": [
+        []
+      ],
+      "usage": {
+        "calls": 5,
+        "with_usage": 5,
+        "input_tokens": 11449,
+        "output_tokens": 658
+      },
+      "final_writes": {
+        "refund_orders": [
+          "A300"
+        ],
+        "refund_executions": 0,
+        "voucher_disputes": 0
+      }
+    },
+    {
+      "id": "foreign_order",
+      "business_passed": true,
+      "fault_checks": {},
+      "failed_turn_checks": [
+        []
+      ],
+      "usage": {
+        "calls": 4,
+        "with_usage": 4,
+        "input_tokens": 7583,
+        "output_tokens": 349
+      },
+      "final_writes": {
+        "refund_orders": [],
+        "refund_executions": 0,
+        "voucher_disputes": 0
+      }
+    },
+    {
+      "id": "refund_receipt_lost",
+      "business_passed": false,
+      "fault_checks": {
+        "fault_injected_once": true,
+        "unknown_write_receipt_visible": true,
+        "read_back_after_lost_receipt": true,
+        "no_new_write_after_uncertain_receipt": true
+      },
+      "failed_turn_checks": [
+        [
+          "voucher_route"
+        ]
+      ],
+      "usage": {
+        "calls": 6,
+        "with_usage": 6,
+        "input_tokens": 13731,
+        "output_tokens": 679
+      },
+      "final_writes": {
+        "refund_orders": [
+          "A400"
+        ],
+        "refund_executions": 0,
+        "voucher_disputes": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "id": "mixed-after-sales-holdout-v1",
+  "protocol": "mixed-holdout-v1",
+  "cases": [
+    {
+      "id": "ambiguous_order",
+      "turns": [
+        {"text": "A300 和 A400 都在我订单列表里，刚说的那笔不合适，帮我退掉。顺便查下 V300 的券现在还能用吗？", "tickets": [], "voucher": ["V300", "explain", "matching_redemption"]},
+        {"text": "我说的是订单 A300，尺码不合适，确定要申请退款。券这边就按刚才查到的结果。", "tickets": [["A300", "pending_approval", "尺码不合适", "customer"]], "voucher": ["V300", "explain", "matching_redemption"]}
+      ]
+    },
+    {
+      "id": "switch_order",
+      "turns": [
+        {"text": "麻烦把 A300 这笔建个退款申请，原因尺码不合适；还有 V500 下午茶券帮我查下为什么扫不出来。", "tickets": [["A300", "pending_approval", "尺码不合适", "customer"]], "voucher": ["V500", "explain", "expired_voucher"]},
+        {"text": "刚才写错了。A300 不退，改申请 A600 的退款，原因是质量问题。V500 不需要再查。", "tickets": [["A300", "rejected", "尺码不合适", "customer"], ["A600", "pending_approval", "质量问题", "approver"]], "voucher": ["V500", "explain", "expired_voucher"]}
+      ]
+    },
+    {
+      "id": "withdraw_with_visit",
+      "turns": [
+        {"text": "V400 在中心店 CENTRAL 那边显示不对，帮我查。A400 是质量问题，另给我申请退款。", "tickets": [["A400", "pending_approval", "质量问题", "approver"]], "voucher": ["V400", "ask_visit", "missing_source"]},
+        {"text": "A400 的退款我撤回。券还是查 V400，中心店不用改，实际到店在 {arrival}。", "tickets": [["A400", "rejected", "质量问题", "approver"]], "voucher": ["V400", "guide_dispute", "missing_source"]}
+      ]
+    },
+    {
+      "id": "merchant_evidence",
+      "seed_dispute": "V200",
+      "turns": [
+        {"text": "我在页面报过 V200 核销异常了，帮我看下争议进度。另一个事情，订单 A300 包装破损，请给我申请退款。", "tickets": [["A300", "pending_approval", "包装破损", "customer"]], "voucher": ["V200", "wait_review", "status_mismatch"]},
+        {"event": "merchant_matches", "text": "商家说刚把那张券的核销流水补进去了，帮我看看现在的凭证和复核进度。退款那边先保持原样。", "tickets": [["A300", "pending_approval", "包装破损", "customer"]], "voucher": ["V200", "wait_review", "matching_redemption"], "merchant_version": 2, "preserve_refund": true}
+      ]
+    },
+    {
+      "id": "review_is_not_refund",
+      "seed_dispute": "V400",
+      "turns": [
+        {"text": "V400 的核销争议麻烦帮我查下，我之前已经填单了。普通订单 A300 只问能不能退，先别提交。", "tickets": [], "voucher": ["V400", "wait_review", "missing_source"]},
+        {"event": "review_resolved", "text": "页面说 V400 有复核结果了，想知道这到底是已经退钱了，还是只是可以去申请。别代我提交任何东西。", "tickets": [], "voucher": ["V400", "report_review", "missing_source"], "case_outcome": "eligible_to_apply"}
+      ]
+    },
+    {
+      "id": "order_read_timeout",
+      "fault": "order_read_timeout",
+      "turns": [
+        {"text": "两件事一起办：看看 V100 咖啡券在中心店 CENTRAL 于 {arrival} 能不能核销；订单 A300 尺码不合适，直接帮我提交退款申请等我确认。", "tickets": [["A300", "pending_approval", "尺码不合适", "customer"]], "voucher": ["V100", "explain", "unused_and_valid"], "visit_step": "eligible_at_store"}
+      ]
+    },
+    {
+      "id": "foreign_order",
+      "turns": [
+        {"text": "这张 V500 还能不能用？另外我只找到订单编号 G100，因为质量问题想提交退款，帮我查了之后发起吧。", "tickets": [], "voucher": ["V500", "explain", "expired_voucher"]}
+      ]
+    },
+    {
+      "id": "refund_receipt_lost",
+      "fault": "refund_receipt_lost",
+      "turns": [
+        {"text": "两个进度一起告诉我：V300 是否已经核销？另外请提交 A400 的退款，质量问题。这单我不确定是不是还得主管审核。", "tickets": [["A400", "pending_approval", "质量问题", "approver"]], "voucher": ["V300", "explain", "matching_redemption"]}
+      ]
+    }
+  ]
+}
