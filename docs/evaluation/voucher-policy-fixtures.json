@@ -1,0 +1,504 @@
+{
+  "dataset_id": "voucher-redemption-synthetic-v1",
+  "label_source": "hand-authored synthetic review scenarios",
+  "cases": [
+    {
+      "id": "R01",
+      "scenario": "时间边界",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R01",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "redemption_supported",
+        "rationale": "模拟审核已确认同一次核销，两个来源的时间完全相同。"
+      }
+    },
+    {
+      "id": "R02",
+      "scenario": "时间边界",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R02",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:02:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "redemption_supported",
+        "rationale": "模拟审核已确认同一次核销，商家时钟偏移正好 120 秒。"
+      }
+    },
+    {
+      "id": "R03",
+      "scenario": "时间边界",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R03",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:02:01+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "redemption_supported",
+        "rationale": "模拟 POS 原始单和到店凭证确认是同一笔，商家时钟偏移 121 秒。"
+      }
+    },
+    {
+      "id": "R04",
+      "scenario": "时间边界",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R04",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:03:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "模拟审核发现商家把另一桌的记录关联到相同流水号，当前证据不足以确认。"
+      }
+    },
+    {
+      "id": "R05",
+      "scenario": "时间边界",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R05",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T11:56:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "redemption_supported",
+        "rationale": "模拟原始 POS 单据证明同一顾客兑换，商家时钟慢 4 分钟。"
+      }
+    },
+    {
+      "id": "R06",
+      "scenario": "时间边界",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R06",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:05:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "模拟审核发现 POS 批量同步时复用了旧流水号，仍需人工核对。"
+      }
+    },
+    {
+      "id": "R07",
+      "scenario": "时间边界",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R07",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:05:01+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "redemption_supported",
+        "rationale": "模拟平台原始记录和商家日志均确认同一次核销，商家本地时钟快 301 秒。"
+      }
+    },
+    {
+      "id": "R08",
+      "scenario": "流水不一致",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R08",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-2",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "平台和商家的流水指向不同交易，现有记录不足以确认消费。"
+      }
+    },
+    {
+      "id": "R09",
+      "scenario": "来源缺失",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R09",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "只有平台核销记录，缺商家记录。"
+      }
+    },
+    {
+      "id": "R10",
+      "scenario": "状态不一致",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R10",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "双方对是否核销的记录互相冲突。"
+      }
+    },
+    {
+      "id": "R11",
+      "scenario": "未核销且有效",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R11",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        },
+        {
+          "source": "merchant",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        }
+      ],
+      "label": {
+        "recommendation": "eligible_to_apply",
+        "rationale": "两份未核销记录一致，模拟券仍有效。"
+      }
+    },
+    {
+      "id": "R12",
+      "scenario": "有效期",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R12",
+        "expires_at": "2026-11-17T13:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        },
+        {
+          "source": "merchant",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "到期时点已不能按未核销且有效给出建议。"
+      }
+    },
+    {
+      "id": "R13",
+      "scenario": "有效期",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R13",
+        "expires_at": "2026-11-17T11:59:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:01:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "核销流水出现在券到期之后，需人工核查。"
+      }
+    },
+    {
+      "id": "R14",
+      "scenario": "时间有效性",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R14",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T13:00:01+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T13:00:02+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "两份流水都晚于本次判定时间，当前不能确认。"
+      }
+    },
+    {
+      "id": "R15",
+      "scenario": "时间有效性",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R15",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": false,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00"
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "商家记录未提供时区，无法对齐两个来源。"
+      }
+    },
+    {
+      "id": "R16-before",
+      "scenario": "V200 补传前",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "V200",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": true,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        }
+      ],
+      "label": {
+        "recommendation": "manual_review",
+        "rationale": "平台显示核销、商家仍显示未使用，模拟审核等待补传。"
+      }
+    },
+    {
+      "id": "R16-after",
+      "scenario": "V200 补传后",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "V200",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": true,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:00:00+08:00"
+        },
+        {
+          "source": "merchant",
+          "status": "redeemed",
+          "redeem_ref": "R-1",
+          "redeemed_at": "2026-11-17T12:01:00+08:00"
+        }
+      ],
+      "label": {
+        "recommendation": "redemption_supported",
+        "rationale": "商家补传原始 POS 记录，经模拟审核确认流水与平台记录对应。"
+      }
+    },
+    {
+      "id": "R17",
+      "scenario": "到店异常",
+      "checked_at": "2026-11-17T13:00:00+08:00",
+      "voucher": {
+        "voucher_id": "R17",
+        "expires_at": "2026-11-17T15:00:00+08:00"
+      },
+      "on_site": true,
+      "evidence": [
+        {
+          "source": "platform",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        },
+        {
+          "source": "merchant",
+          "status": "unused",
+          "redeem_ref": null,
+          "redeemed_at": null
+        }
+      ],
+      "label": {
+        "recommendation": "eligible_to_apply",
+        "rationale": "两边显示未核销，用户在店遇到无法接待，仍需人工处理到店异议。"
+      }
+    }
+  ]
+}

@@ -33,7 +33,7 @@ def task_api(tmp_path, monkeypatch):
                     list_knowledge_documents=lambda **k: [], search_knowledge=lambda x: ""),
         "retrieval": dict(DEFAULT_STRATEGY="hybrid", retrieve=lambda *a, **k: []),
         # 核查器现在返回结构化结论；测试里不需要真实模型。
-        "evidence": dict(verify_evidence=lambda *a: types.SimpleNamespace(
+        "evidence": dict(cited_evidence=lambda *a: [], verify_evidence=lambda *a: types.SimpleNamespace(
             sufficient=False, quote="", missing="未调用检索")),
         "tasks": dict(get_task_status=lambda x: {}, submit_index_task=lambda *a, **k: {}),
     }.items():
@@ -83,6 +83,32 @@ def script(model, *calls):
     model.responses = [AIMessage(content="", tool_calls=[{
         "name": name, "args": args, "id": f"call_{i}", "type": "tool_call"
     }]) for i, (name, args) in enumerate(calls)] + [AIMessage(content="处理已完成")]
+
+
+def test_chat_can_check_voucher_without_creating_a_case(task_api):
+    from langchain.agents import create_agent
+    import voucher_disputes
+
+    api, client, _, model = task_api
+    voucher_disputes.seed_demo()
+    auth_response = client.post("/auth/login", json={"username": "acme-user", "password": "demo1234"})
+    client.headers["Authorization"] = "Bearer " + auth_response.json()["access_token"]
+    sid = client.post("/sessions", json={}).json()["id"]
+    page = client.get("/voucher-center")
+    assert page.status_code == 200 and "团购券核销争议" in page.text
+    api.app.state.agent = create_agent(model=model, tools=[api.check_voucher_redemption],
+                                       checkpointer=api.app.state.memory)
+    script(model, ("check_voucher_redemption", {"voucher_id": "V200", "store_code": "CENTRAL"}))
+    response = client.post("/chat/stream", json={"thread_id": sid, "message": "为什么 V200 显示已经核销？"})
+    assert response.status_code == 200
+    history = client.get(f"/sessions/{sid}/messages").json()["messages"]
+    result = next(m for m in history if m["role"] == "tool_result")
+    checked = api.json.loads(result["text"])
+    assert checked["reason_code"] == "status_mismatch" and checked["voucher"]["policy_version"] == "voucher-v2"
+    assert checked["visit"]["next_step"] == "submit_dispute"
+    assert checked["help_url"].startswith("/voucher-center?voucher=V200&store=CENTRAL")
+    assert client.get("/voucher-disputes").json() == {"cases": []}
+    assert not tickets.list_tickets()
 
 
 def pending(client, sid, model, order="A100", revision=1):
@@ -234,5 +260,53 @@ def test_execution_tool_rejects_stale_task_revision(task_api):
     config = {"configurable": {"thread_id": sid, "tenant": "acme", "user_id": "acme-manager", "roles": ["customer"]}}
     response = api.create_refund_request.invoke({"order_id": "A100", "reason": "质量问题", "task_revision": 1}, config=config)
     assert "未执行" in response
+    with db.session(orders.ORDERS_DB) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM refund_executions").fetchone()[0] == 0
+
+
+def test_http_queue_filters_before_limit_and_preserves_audit_view(task_api):
+    api, client, sid, model = task_api
+    target = tickets.create_ticket(thread_id="old", order_id="queue-old", tenant_id="acme",
+                                    requester_id="acme-user", required_role="approver")
+    for i in range(4):
+        tickets.create_ticket(thread_id=f"own{i}", order_id=f"own{i}", tenant_id="acme",
+                              requester_id="acme-manager", required_role="approver")
+        tickets.create_ticket(thread_id=f"low{i}", order_id=f"low{i}", tenant_id="acme",
+                              requester_id="acme-user", required_role="customer")
+        tickets.create_ticket(thread_id=f"other{i}", order_id=f"other{i}", tenant_id="globex",
+                              requester_id="globex-user", required_role="approver")
+    response = client.get("/tickets?actionable_only=true&limit=1")
+    assert response.status_code == 200
+    assert [t["id"] for t in response.json()["tickets"]] == [target["id"]]
+    assert len(client.get("/tickets").json()["tickets"]) == 9
+    token = client.post("/auth/login", json={"username": "acme-user", "password": "demo1234"}).json()["access_token"]
+    assert client.get("/tickets?actionable_only=true", headers={"Authorization": "Bearer " + token}).status_code == 403
+
+
+def test_http_pending_filter_precedes_limit(task_api):
+    api, client, sid, model = task_api
+    target = tickets.create_ticket(thread_id=sid, order_id="queue-target", tenant_id="acme",
+                                    requester_id="acme-manager")
+    for i in range(4):
+        done = tickets.create_ticket(thread_id=f"history{i}", order_id=f"history{i}",
+                                     tenant_id="acme", requester_id="acme-manager")
+        tickets.reject_ticket(done["id"])
+    assert client.get("/tickets?pending_only=true&limit=1").json()["tickets"][0]["id"] == target["id"]
+
+
+def test_legacy_high_risk_card_can_reject_but_not_self_approve(task_api):
+    api, client, sid, model = task_api
+    task = client.patch(f"/sessions/{sid}/refund-task", json={
+        "expected_revision": 0, "order_id": "A500", "reason": "质量问题", "intent": "apply",
+    }).json()
+    action = pending(client, sid, model, order="A500", revision=task["revision"])
+    payload = dict(thread_id=sid, approval_id=action["approval_id"], decision="approve")
+    assert client.post("/chat/resume", json=payload).status_code == 403
+    payload["decision"] = "reject"
+    response = client.post("/chat/resume", json=payload)
+    assert response.status_code == 200
+    events = parse_sse(response.text)
+    assert not any(k == "error" for k, _ in events), events
+    assert tickets.get_ticket(action["approval_id"])["status"] == tickets.REJECTED
     with db.session(orders.ORDERS_DB) as conn:
         assert conn.execute("SELECT COUNT(*) FROM refund_executions").fetchone()[0] == 0

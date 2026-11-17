@@ -1,10 +1,55 @@
 # 智能售后工单 Agent
 
-面向售后退款场景的工单处理 Agent：**服务端鉴权 → 订单归属核验 → 检索政策 → 核查证据 → 判断可退性 → 人工审批 → 幂等执行 → 失败恢复**。
+这是一个处理**售后退款与团购券核销争议**的 Agent。模型负责理解需求、查询证据和提出任务计划，服务端校验订单归属、业务规则和审批权限，并持久化每笔操作的状态。
 
-不是"能回答问题的客服机器人"，而是尝试把 Agent 的建议变成受权限、审批和数据库约束控制的可执行动作。租户、用户与角色来自服务端签发的短期 Bearer token，不接受客户端在聊天请求里自行声明租户。
+| 场景 | 可以演示什么 |
+| --- | --- |
+| 双订单退款 | 一笔等待主管审批，另一笔独立推进；改口时局部重规划，已完成的退款保留原流水 |
+| 到店核销争议 | 消费者查询规则、提交争议，主管核对平台与商家流水；商家补传新证据后，旧版本复核会被拒绝 |
+| Agent Loop 故障恢复 | 只读查询超时后限次重试；写入回执丢失后查询原工单；按轮记录工具尝试、耗时和停止原因 |
 
-安全边界、已实现的防护和生产缺口见 [SECURITY.md](SECURITY.md)。
+## 先跑一个示例
+
+**双订单退款**可用轻量依赖运行，脚本使用临时 SQLite 和预设计划。
+
+```bash
+python -m pip install "fastapi==0.147.0" "pydantic==2.13.5" "python-dotenv==1.2.3"
+python plan_eval.py --cases dual --output work/planning/demo.json
+```
+
+**团购券争议**可在 [本机演示入口](http://127.0.0.1:8765/) 切换消费者与主管身份，体验提交 V200、补传商家流水和刷新后复核。下方的规则回放命令仅需 Python 标准库。完整步骤见 [团购券核销争议](docs/voucher-disputes.md#离线浏览器演示)。
+
+```bash
+python -m pip install "fastapi==0.147.0" "uvicorn==0.54.0" "pydantic==2.13.5" "python-dotenv==1.2.3"
+python scripts/run_voucher_demo.py
+```
+
+```bash
+python scripts/replay_voucher_policy.py
+```
+
+**Agent Loop 故障回放**需先完成 [本地依赖安装](#本地运行)，测试可在无模型 API Key 的环境下运行。测试模拟「同时查 V200 和申请 A300 退款」，依次注入订单查询超时和工单写入后断连。审批后重复请求执行，模拟网关只生成一笔退款流水。详见 [执行层与回放说明](docs/agent-runtime.md)。
+
+```bash
+python -m pytest tests/test_agent_runtime.py -q -o junit_logging=log --junitxml=work/agent-runtime/fault-tests.xml
+```
+
+## 可复现结果
+
+| 验证 | 结果与条件 |
+| --- | --- |
+| 本地隔离回归 | 340 项通过、1 项跳过、2 项未选中，11 个验收阶段全部通过。使用临时 SQLite、独立上传目录和新知识索引 |
+| 局部重规划 | 仅修改待审批订单的退款原因时，实际调度步数由 3 步降为 1 步。更换订单时两种策略均为 3 步。每个场景每种策略各运行 10 次 |
+| 故障注入 | 4 项用例通过，覆盖写入丢回执后的状态确认、重复参数截断，以及主模型和证据核查的 HTTP 超时传递 |
+| 核销规则回放 | 相同 18 份合成快照上，收紧时间容差后，误确认由 2/18 降至 0/18，漏确认由 1/18 增至 3/18 |
+
+上述结果来自脚本模型、确定性评测或模拟网关。真实模型自主恢复成功率及固定图与模型规划的效果差异仍待配对评测。进一步查看 [任务规划与编排](docs/agent-planning.md) · [重规划对照数据](docs/refund-recovery-verification.md) · [核销规则逐案回放](docs/evaluation/voucher-policy-replay-2026-11-17.md) · [安全边界](SECURITY.md)。
+
+```bash
+python scripts/verify_project.py --output work/verification
+```
+
+默认核验无需远程模型。配置 API Key 后可加 `--with-model` 运行真实模型评测，使用供应商 API 额度。完整产品入口见 [快速开始](#快速开始)。
 
 ![对话与人工审批](docs/screenshots/approval.png)
 
@@ -24,6 +69,7 @@
 | 层 | 选型 |
 |---|---|
 | Agent | LangGraph 1.2（对话 Agent + 独立审批/执行 StateGraph） |
+| 规划与编排 | Pydantic 结构化计划、持久化 DAG、独立任务、局部重规划、租约与有限重试 |
 | 模型 | DeepSeek（OpenAI 兼容接口） |
 | 检索 | Chroma + `bge-small-zh-v1.5`，多租户 `where` 前置过滤 |
 | 鉴权 | PBKDF2 密码哈希 + HMAC-SHA256 Bearer token |
@@ -36,11 +82,9 @@
 
 ---
 
-## 设计取舍（先读这一节）
+## 设计取舍
 
-这个项目最容易讲错的一句话是"它是一个自主 agent"。**它不是**：
-对话侧是 agent（模型决定调哪个工具、调几次、何时追问），动作侧是确定性状态机
-（审批与执行只认数据库状态）。这个划分本身就是设计决策。
+对话侧由模型选择工具、追问和拟定计划。审批与执行根据数据库中的状态、权限与版本推进。
 
 四个边界，每个都写清了"放弃了什么"：
 
@@ -57,23 +101,25 @@
 
 ## 核心能力
 
-**新增：MCP 工具服务**
+**MCP 工具服务**
 
 售后能力抽成独立 MCP server：任何支持 MCP 的客户端都能调用，但租户由
 `Authorization: Bearer` token 决定，客户端不能自报。写操作只创建待审批工单，
 不执行退款。鉴权边界、工具清单与连接方式见 [MCP 工具服务](docs/mcp.md)。
 
-**新增：Loop / 上下文 / 长期记忆**
+**Agent Loop、上下文与长期记忆**
 
-生产 Agent 增加逐轮模型与工具预算、相同参数重复调用检测、时间与递归兜底。
+Agent Loop 设有逐轮模型和工具预算、同参重复上限、时间预算和图递归上限。
 长对话按完整轮次生成抽取式摘录，原始 checkpoint 保留；当前任务状态每次从数据库重新加载。
 长期记忆支持明确保存的类型化偏好（可查看、删除、过期）和带来源的历史售后查询，
 不携带新的审批权限。机制、默认边界与限制见 [上下文与记忆说明](docs/context-memory.md)。
+Agent 在工具超时后可按操作类型恢复。只读查询允许有限重试，写入结果未知时可以查询原工单。
+调用轨迹和离线故障回放步骤见 [Agent 执行与回放](docs/agent-runtime.md)。
 
 订单查询工具返回结构化失败信封（`code` / `retryable` / `hint`）：
 `not_found` 不重试、应核对订单号，`transient` 可重试一次；工具异常不再中断整轮对话。
 
-**新增：持久化退款任务与任务终态评测**
+**持久化退款任务与终态评测**
 
 退款的订单、原因、咨询/申请意图、版本和关联工单独立于聊天记录保存在 SQLite。
 模型通过 `get_refund_task` / `update_refund_task` 逐步补全；新提交的退款动作必须
@@ -115,11 +161,11 @@
 状态流转为 `pending_approval → approved → executing → executed`，失败进入 `failed`。`approved → executing` 使用带源状态条件的原子 UPDATE；下游退款以工单 ID 作为幂等键，并有数据库唯一约束。即使下游成功、工单更新前进程退出，重试也会拿回同一个退款单号。
 
 **4. 分层评测与安全回归**
-92 条人工标注的开发回归集：**单轮 80 条** + **多轮 12 条**。单轮里除常规题型外，还有 6 条**版本冲突**（新旧政策并存）和 4 条**时效性**（活动/公告限时规则）——这两类是检索最容易错的场景。其中 10 条 hold-out。另外有确定性的租户越权、审批绕过、重复执行和崩溃恢复测试。
+92 条人工标注的开发回归集：**单轮 80 条** + **多轮 12 条**。单轮里除常规题型外，还有 6 条**版本冲突**（新旧政策并存）和 4 条**时效性**（活动/公告限时规则）——这两类是检索最容易错的场景。其中 11 条标为 hold-out。另外有确定性的租户越权、审批绕过、重复执行和崩溃恢复测试。
 
 多轮题靠 `history` 字段逐条回放，让 agent 真实响应每一轮，而不是把历史拼成一条消息——后者测不出 checkpointer 是否真的在累积状态。
 
-扩语料后单轮 80/80、多轮 12/12。这组数据只能说明当前题目通过，不能外推为生产准确率——题目是按已知知识库内容写的，覆盖不到真实用户的问法分布。
+历史单轮记录为 77/80、78/80 两次运行，多轮为 12/12；未归档原始报告的成绩只作历史说明。题目按已知知识库编写，不能外推为生产准确率，也不能将单测数量写成模型任务成功率。
 
 **5. 文档索引异步化**
 上传接口立刻返回 `task_id`，解析、切分、向量化在 Celery worker 里跑，前端轮询进度。任务只对瞬时错误重试，幂等键是 **租户 + 内容哈希**，避免两个租户上传相同文件时第二份文档被误判为重复。
@@ -315,7 +361,7 @@ GitHub Actions 会运行核心鉴权/退款单测、任务终态回归、真实 
 
 ## 评测结果（本地历史快照）
 
-152 篇知识库文档（含 2 篇租户专属）/ 92 条测试集（单轮 80 + 多轮 12），其中 10 条为 hold-out（只用于验收，不参与调参）。
+152 篇知识库文档（含 2 篇租户专属）/ 92 条测试集（单轮 80 + 多轮 12），其中 11 条标为 hold-out。检索子集 78 条，dev 67 条，指定 hold-out 11 条。留出题已在历史评审中检查过，不能继续称作未见测试集；权重扫描只使用 dev。
 
 | 指标 | 22 篇（纯向量） | 152 篇（纯向量） | **152 篇（混合召回）** |
 |---|---|---|---|
@@ -498,7 +544,7 @@ python reconcile_refunds.py
 ### 2. BM25 混合召回：一个被数据推翻过两次的结论
 
 实现了向量 / BM25 / RRF 融合三种策略并做了对比。**这个结论随语料规模变过三次**
-（调参集 67 条，非 hold-out；152 chunk 那几行是统一检索路径之后重测的）：
+（以下为历史记录，调参集 67 条，非 hold-out；当前完整扫描和指纹以验收记录链接的 JSON 为准）：
 
 | 语料 | 权重 | R@3（线上） | Recall@5 | Hit@1 | MRR@10 |
 |---|---|---|---|---|---|
@@ -606,7 +652,8 @@ An assistant message with 'tool_calls' must be followed by tool messages
    但下游以工单 ID 为幂等键，只会返回原退款单号。
 
 当前新申请使用 `submit_refund_request` 正常返回待审批工单，独立 `refund_flow.py` 持久化审批与执行。
-对话图无需挂起，因此可以继续理解改口、取消和插话；审批结果由服务端直接写回对话。
+对话图可以在审批期间继续处理改口、撤回和插话。聊天记录接口从同一会话的终态工单生成回执，
+所以恢复脚本完成的退款也会在重新打开会话时显示。
 
 旧路径的恢复失败不影响退款本身——钱已经退完了，只是会话里少一句收尾说明，
 所以这个异常不会抛给审批人，只在响应里带 `session_synced: false`。
@@ -769,13 +816,17 @@ orders.py               订单归属、退款资格、幂等退款网关
 refund_service.py       审批绑定、原子抢占、执行与对账
 refund_flow.py          独立持久化审批/执行图，不阻塞对话
 refund_tasks.py         任务版本、下一步建议、变更审计
+planning.py             结构化计划与依赖校验
+plan_store.py           计划与步骤持久化、抢占和执行记录
+orchestrator.py         调度、局部重规划与恢复
 session_guard.py        单会话并发控制（不是全局 LLM 锁）
 task_scenarios.py       12 个合成多轮业务任务（dev/holdout 分开）
 task_eval.py            分层报告、重复运行、场景指纹、配对对照
 task_eval_model.py      真模型任务回放与业务终态验收
 reconcile_refunds.py    对账批处理：恢复已批准/执行中的退款工单
 prune_checkpoints.py    会话历史清理：按空闲天数删 checkpoint（默认预览，--apply 才写库）
-agent_context.py        逐轮循环边界、请求时压缩、任务快照注入
+agent_context.py        逐轮循环边界、工具重试、任务快照注入
+agent_runtime.py        剩余时间预算、I/O 错误分类与运行轨迹
 long_memory.py          类型化偏好（可过期/删除）与只读售后历史
 evidence.py             证据核查（结构化输出，不依赖检索栈）
 mcp_server.py           MCP 协议层：5 个工具、Bearer 鉴权、HTTP/stdio 传输
@@ -797,9 +848,6 @@ eval_dataset.py         92 条评测集（单轮 80 + 多轮 12，单一数据�
 action_eval.py          44 条动作轨迹场景（安全指标，不是准确率）
 action_eval_model.py    8 条模型行为场景（独立进程，需真实模型）
 risk.py                 退款风险分级规则（纯函数，带版本号）
-action_eval.py          44 条动作轨迹场景（安全指标，不是准确率）
-action_eval_model.py    8 条模型行为场景（独立进程，需真实模型）
-risk.py                 退款风险分级规则（纯函数，带版本号）
 evaluate_rag.py         检索策略对比
 evaluate_answerability.py  证据核查二分类
 evaluate_agent.py       问答回归通过率（非退款办结率）
@@ -809,6 +857,10 @@ seed_distractors.py     生成干扰文档
 download_reranker.py    下载 Reranker 模型
 index.html              聊天界面（浅色 / 深色，支持 ?theme= 与 ?new=1）
 knowledge.html          知识库管理界面
+voucher_center.html     消费者核销核查与主管争议复核
+voucher_api.py          核销争议 API 与商家证据入口
+voucher_disputes.py     核销证据、争议状态与复核版本
+voucher_policy.py       团购券适用规则
 knowledge/              152 篇语料（150 篇公共 + 2 篇租户专属）
 docs/screenshots/       README 用的界面截图
 
@@ -827,7 +879,7 @@ tests/                  pytest 用例（协议、租户、退款状态机、安�
   test_eval_dataset.py    评测集分组 + 多轮回放逻辑
   test_risk.py            风险分级规则（边界、组合、确定性）
   test_action_safety.py   动作级评测接入 CI（危险动作即失败）
-  test_action_safety.py   动作级评测接入 CI（危险动作即失败）
+  test_agent_runtime.py   执行层故障注入、回放与 HTTP 超时传递
   test_hitl_http.py       真实模型端到端（标记 llm，默认跳过）
 
 conftest.py             pytest 夹具（含 FakeAgent、工单库隔离）

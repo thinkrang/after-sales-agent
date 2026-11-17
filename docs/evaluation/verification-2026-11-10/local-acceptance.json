@@ -1,0 +1,178 @@
+{
+  "provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+  },
+  "passed": 32,
+  "failed": 0,
+  "blocked": 1,
+  "data_dir": "<local-path>",
+  "results": [
+    {
+      "step": "S1a /health",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "step": "S1b /ready",
+      "status": "PASS",
+      "detail": "HTTP 200 {'status': 'ready', 'checks': {'vector_store': {'ok': True, 'chunks': 152}, 'tic"
+    },
+    {
+      "step": "S1c Docker 空容器启动",
+      "status": "BLOCKED",
+      "detail": "本机 docker daemon 未运行，无法验证；已用空数据目录替代其数据面"
+    },
+    {
+      "step": "S2a acme-manager 登录",
+      "status": "PASS",
+      "detail": "tenant=acme roles=['approver', 'customer', 'knowledge_admin']"
+    },
+    {
+      "step": "S2b 创建会话",
+      "status": "PASS",
+      "detail": "HTTP 200 id=chat_549f5c7161e3"
+    },
+    {
+      "step": "S3a 能看到 A100",
+      "status": "PASS",
+      "detail": "共 4 单；A100=有"
+    },
+    {
+      "step": "S3b 归属正确",
+      "status": "PASS",
+      "detail": "owner=None status=delivered"
+    },
+    {
+      "step": "S4a 第一轮：模型征求确认",
+      "status": "PASS",
+      "detail": "事件=['done', 'status', 'token', 'tool'] 耗时 11.7s"
+    },
+    {
+      "step": "S4b 第二轮：触发审批中断",
+      "status": "PASS",
+      "detail": "事件=['interrupt', 'status', 'token', 'tool']"
+    },
+    {
+      "step": "S4c 返回 approval_id",
+      "status": "PASS",
+      "detail": "approval_id=efd7399c94ea4bed"
+    },
+    {
+      "step": "S5 待审批状态可恢复",
+      "status": "PASS",
+      "detail": "HTTP 200 含订单号=True"
+    },
+    {
+      "step": "S6a 批准请求",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "step": "S6b 工单到达 executed",
+      "status": "PASS",
+      "detail": "A100 工单 1 条，executed 1 条，refund_id=RFB91133B6600B4268"
+    },
+    {
+      "step": "S7a 重复批准被拒",
+      "status": "PASS",
+      "detail": "HTTP 409"
+    },
+    {
+      "step": "S7b 仍只有一笔退款",
+      "status": "PASS",
+      "detail": "executed 工单数=1"
+    },
+    {
+      "step": "S8a 读不到 ACME 会话",
+      "status": "PASS",
+      "detail": "HTTP 404（期望 404，不泄露存在性）"
+    },
+    {
+      "step": "S8b 看不到 ACME 订单 A100",
+      "status": "PASS",
+      "detail": "globex 可见 1 单，含 A100=否"
+    },
+    {
+      "step": "S9a 能被对账脚本发现",
+      "status": "PASS",
+      "detail": "可恢复 1 条"
+    },
+    {
+      "step": "S9b 对账后到达终态",
+      "status": "PASS",
+      "detail": "status=executed refund_id=RFB0AA3AB827A54CC0"
+    },
+    {
+      "step": "S9c 重复对账不再处理",
+      "status": "PASS",
+      "detail": "已终态，不会被再次捞出"
+    },
+    {
+      "step": "S10a 判定为高风险",
+      "status": "PASS",
+      "detail": "tier=high role=approver rules=2026-10-25.1"
+    },
+    {
+      "step": "S10b 客户自批被拒（服务层）",
+      "status": "PASS",
+      "detail": "该退款需要主管审批（金额 1280.00 元达到或超过自动审批上限 500 元）"
+    },
+    {
+      "step": "S11a 主管批准成功",
+      "status": "PASS",
+      "detail": "HTTP 200"
+    },
+    {
+      "step": "S11b 批准后直接执行",
+      "status": "PASS",
+      "detail": "status=executed refund_id=RF05B0BDA9F7064F9E"
+    },
+    {
+      "step": "S11c 重复审批被拒",
+      "status": "PASS",
+      "detail": "HTTP 409"
+    },
+    {
+      "step": "S12a 边界政策判为高风险",
+      "status": "PASS",
+      "detail": "tier=high"
+    },
+    {
+      "step": "S12b 自己批自己被拒",
+      "status": "PASS",
+      "detail": "HTTP 403"
+    },
+    {
+      "step": "S13a 待审批可自然语言撤回并继续咨询",
+      "status": "PASS",
+      "detail": "事件=['done', 'status', 'token', 'tool'] task=cancelled 提示=您说的「先不退了」，我理解为要撤回刚才的 A300 退款申请，正在为您处理。已为"
+    },
+    {
+      "step": "S14a 独立审批人账号可用",
+      "status": "PASS",
+      "detail": "roles=['approver']"
+    },
+    {
+      "step": "S14b 客户触发高风险单",
+      "status": "PASS",
+      "detail": "approval_id=70ee3694ab2c4a53"
+    },
+    {
+      "step": "S14c 审批人批准并同步会话",
+      "status": "PASS",
+      "detail": "status=executed session_synced=True"
+    },
+    {
+      "step": "S14d 客户可继续对话",
+      "status": "PASS",
+      "detail": "事件=['done', 'status', 'token', 'tool'] 回答=你的退款已通过审批并完成退款执行：\n\n- 订单号：A600（智能手表）\n- 退款"
+    },
+    {
+      "step": "S14e 会话里能看到退款结果",
+      "status": "PASS",
+      "detail": "会话历史含退款单号"
+    }
+  ]
+}

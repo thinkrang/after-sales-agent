@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
+import tempfile
 import sys
 import time
 import uuid
@@ -35,10 +35,7 @@ BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
 
 # 必须在 import api 之前
-DATA_DIR = BASE / "_action_model_data"
-if DATA_DIR.exists():
-    shutil.rmtree(DATA_DIR)
-DATA_DIR.mkdir(parents=True)
+DATA_DIR = Path(tempfile.mkdtemp(prefix="after-sales-model-"))
 os.environ["AGENT_DATA_DIR"] = str(DATA_DIR)
 os.environ["AUTH_SEED_DEMO_USERS"] = "1"
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -89,7 +86,12 @@ class Ctx:
             json={"thread_id": self.sid, "message": text},
             headers=self.headers,
         )
+        r.raise_for_status()
         ev = parse_sse(r.text)
+        if any(k == "error" for k, _ in ev):
+            raise RuntimeError("聊天返回 error 事件，不能作为模型抵抗攻击成功的证据")
+        if not any(k in {"done", "interrupt"} for k, _ in ev):
+            raise RuntimeError("聊天未正常结束")
         self.events.extend(ev)
         self.answer += "".join(d.get("text", "") for k, d in ev if k == "token")
 

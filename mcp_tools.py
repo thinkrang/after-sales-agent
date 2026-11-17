@@ -14,6 +14,7 @@ MCP 协议本身不携带用户身份，所以 tenant/user 只能由服务端从
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import re
 
@@ -23,12 +24,14 @@ import orders
 import refund_service
 import refund_tasks
 import tool_result
+import db
+import tickets
 
 THREAD_PREFIX = "mcp-"
 
 
 def default_thread(user) -> str:
-    """MCP 没有会话概念，给每个用户一个固定线程存放退款任务。"""
+    """Stable namespace; each order now receives a separate task within it."""
     slug = re.sub(r"[^A-Za-z0-9_-]", "-", user.username)[:40]
     return f"{THREAD_PREFIX}{slug}"
 
@@ -58,6 +61,12 @@ def get_order_info(user, order_id: str) -> str:
 
 
 def get_refund_task(user, thread_id: str | None = None) -> str:
+    if thread_id is None:
+        with db.session(tickets.DB_PATH) as conn:
+            rows = conn.execute("""SELECT thread_id FROM refund_tasks
+                WHERE tenant_id=? AND requester_id=? AND substr(thread_id,1,4)='mcp-'
+                ORDER BY updated_at DESC LIMIT 20""", (user.tenant_id, user.username)).fetchall()
+        return json.dumps({"tasks": [refund_tasks.get(user, r[0]) for r in rows]}, ensure_ascii=False)
     return json.dumps(
         refund_tasks.get(user, thread_id or default_thread(user)), ensure_ascii=False
     )
@@ -69,7 +78,7 @@ def recall_history(user, limit: int = 3) -> str:
 
 def search_shop_info(user, question: str, top_k: int = 3) -> str:
     """检索 + 证据核查。检索栈依赖较重，按需导入。"""
-    from evidence import verify_evidence
+    from evidence import cited_evidence, verify_evidence
     from rag import format_evidence
     import retrieval
 
@@ -84,17 +93,24 @@ def search_shop_info(user, question: str, top_k: int = 3) -> str:
         return tool_result.retrieval_failure()
 
     if verdict.sufficient:
-        return format_evidence(results)
+        return format_evidence(cited_evidence(verdict, results))
     return tool_result.no_evidence(verdict.missing or "核查结果无效")
 
 
-def prepare_refund(user, order_id: str, reason: str, thread_id: str | None = None) -> str:
+def prepare_refund(user, order_id: str, reason: str, thread_id: str | None = None,
+                   expected_revision: int | None = None) -> str:
     """登记任务并创建待审批工单；返回 approval_id，不执行退款。"""
-    tid = thread_id or default_thread(user)
+    key = hashlib.sha256(json.dumps([user.tenant_id, user.username, order_id.strip()]).encode()).hexdigest()[:24]
+    tid = thread_id or default_thread(user) + "-" + key
     try:
+        if not tid.startswith("mcp-") or len(tid) > 120:
+            raise refund_tasks.TaskConflict("请使用 MCP 返回的任务标识")
         task = refund_tasks.get(user, tid)
+        unchanged = task["order_id"] == order_id.strip() and task["reason"] == " ".join(reason.split())
+        if task["revision"] and not unchanged and expected_revision is None:
+            raise refund_tasks.TaskConflict("修改已有任务必须提供读取到的 expected_revision")
         task = refund_tasks.update(
-            user, tid, expected_revision=task["revision"],
+            user, tid, expected_revision=task["revision"] if expected_revision is None else expected_revision,
             order_id=order_id, reason=reason, intent="apply", source="mcp",
         )
         ticket, _ = refund_service.prepare_ticket(
@@ -106,6 +122,8 @@ def prepare_refund(user, order_id: str, reason: str, thread_id: str | None = Non
             order_id=ticket["order_id"],
             amount=f"{ticket['amount_cents'] / 100:.2f}",
             required_role=ticket["required_role"], thread_id=tid,
+            task_id=tid, task_revision=task["revision"],
+            approval_url=f"/tickets/{ticket['id']}/decision",
         )
     except refund_tasks.TaskConflict as exc:
         return tool_result.fail(

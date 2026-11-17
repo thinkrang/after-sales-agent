@@ -1,97 +1,79 @@
-"""在非 hold-out 题目上扫描 RRF 融合权重。
+"""按线上 top_k=3 扫描 RRF 权重；默认只使用 dev。
 
-为什么要分 hold-out
--------------------
-如果拿全部 50 条题来调权重，调出来的数字就是"背答案"的结果，
-换一批题立刻打回原形。正确做法是：
-    - 调参只用非 hold-out 的题（40 条）
-    - hold-out 的 10 条只在最后验收时跑一次
-这样报出来的指标才反映泛化能力。
+python tune_rrf.py --output work/rrf-dev.json
+python tune_rrf.py --holdout --output work/rrf-with-holdout.json
 
-注意：本脚本只做权重扫描，不改 retrieval.py 里的默认值。
-      确定权重后请手工把 VECTOR_WEIGHT / BM25_WEIGHT 改成最优值。
+选择规则预先固定为 dev R@3、再 MRR@10，平局取 GRID 中首项。
+--holdout 只评估选定权重，不扫描留出集；历史上已看过的题不算未见数据。
+不修改生产默认权重。JSON 保留题目 ID、索引/数据集指纹和逐题结果。
 """
+
+import argparse
+import hashlib
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 
 import retrieval
 from eval_dataset import retrieval_cases
+from evaluate_rag import run_strategy
+from task_eval import provenance
 
-TOP_K = 10
-RECALL_AT = 5
-
-# (向量权重, BM25 权重)
-GRID = [
-    (1.0, 0.0),   # 纯向量，作为对照
-    (0.9, 0.1),
-    (0.8, 0.2),
-    (0.7, 0.3),
-    (0.6, 0.4),
-    (0.5, 0.5),   # 等权
-]
+GRID = [(1.0, 0.0), (0.9, 0.1), (0.8, 0.2), (0.7, 0.3),
+        (0.6, 0.4), (0.5, 0.5), (0.4, 0.6), (0.0, 1.0)]
 
 
 def score(wv: float, wb: float, cases: list[dict]) -> dict:
-    retrieval.VECTOR_WEIGHT = wv
-    retrieval.BM25_WEIGHT = wb
-
-    hits = hit1 = 0
-    rr = 0.0
-
-    for case in cases:
-        results = retrieval.hybrid_retrieval(case["question"], TOP_K)
-        rank = next(
-            (r["rank"] for r in results if r["source"] in case["expected_sources"]),
-            None,
-        )
-        if rank is not None and rank <= RECALL_AT:
-            hits += 1
-        if rank == 1:
-            hit1 += 1
-        if rank is not None:
-            rr += 1.0 / rank
-
-    n = len(cases)
-    return {"recall": hits / n, "hit1": hit1 / n, "mrr": rr / n, "n": n}
+    original = retrieval.VECTOR_WEIGHT, retrieval.BM25_WEIGHT
+    try:
+        retrieval.VECTOR_WEIGHT, retrieval.BM25_WEIGHT = wv, wb
+        result = run_strategy("hybrid", cases)
+        return {"vector_weight": wv, "bm25_weight": wb, **result}
+    finally:
+        retrieval.VECTOR_WEIGHT, retrieval.BM25_WEIGHT = original
 
 
 def main():
-    cases = retrieval_cases(include_holdout=False)
-    print(f"调参集：非 hold-out {len(cases)} 条\n")
-    print(f"{'向量:BM25':<14}{'Recall@5':>11}{'Hit@1':>10}{'MRR@10':>10}")
-    print("-" * 46)
-
-    rows = []
-    for wv, wb in GRID:
-        r = score(wv, wb, cases)
-        rows.append((wv, wb, r))
-        print(f"{wv:.1f}:{wb:.1f}{'':<8}{r['recall']:>10.2%} "
-              f"{r['hit1']:>9.2%} {r['mrr']:>9.4f}")
-
-    # 三个指标不一定会指向同一个配置，所以分别报出来，不替使用者做决定。
-    # 之前这里只按 MRR 选"最优"，却把 Hit@1 一起打印出来，
-    # 看起来像是"MRR 最优的那个配置 Hit@1 也最好"——实际可能更差。
-    by_mrr = max(rows, key=lambda x: x[2]["mrr"])
-    by_hit = max(rows, key=lambda x: x[2]["hit1"])
-    by_recall = max(rows, key=lambda x: x[2]["recall"])
-
-    def line(tag, pick):
-        wv, wb, r = pick
-        return (f"  {tag:<10} 向量 {wv:.1f} : BM25 {wb:.1f}   "
-                f"Recall@5 {r['recall']:.2%}  Hit@1 {r['hit1']:.2%}  MRR {r['mrr']:.4f}")
-
-    print("\n各指标的最优配置：")
-    print(line("按 MRR", by_mrr))
-    print(line("按 Hit@1", by_hit))
-    print(line("按 Recall@5", by_recall))
-
-    same = by_mrr[:2] == by_hit[:2] == by_recall[:2]
-    print()
-    if same:
-        print("三个指标指向同一配置，可以放心改成这个值。")
-    else:
-        print("三个指标指向不同配置，需要按下游怎么用检索结果来决定：")
-        print("  - 只取 top-1 给用户看 → 看 Hit@1")
-        print("  - 把 top-k 全文喂给模型 → 看 Recall@5（漏召回比排序靠后更致命）")
-        print("本项目是后者：top_k 篇文档全文进证据核查，漏掉就没法答。")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--holdout", action="store_true")
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    dev = retrieval_cases(include_holdout=False)
+    holdout = [c for c in retrieval_cases() if c["holdout"]]
+    retrieval.retrieve("预热", top_k=3, strategy="hybrid")
+    rows = [score(wv, wb, dev) for wv, wb in GRID]
+    chosen = max(rows, key=lambda r: (r["recall3"], r["mrr"]))
+    print(f"dev {len(dev)} 条；holdout {len(holdout)} 条（未参与选择）")
+    print("向量:BM25       R@3      R@5     Hit@1    MRR@10")
+    for r in rows:
+        print(f"{r['vector_weight']:.1f}:{r['bm25_weight']:.1f}"
+              f"       {r['recall3']:.2%}   {r['recall']:.2%}"
+              f"   {r['hit1']:.2%}   {r['mrr']:.4f}")
+    print(f"dev 选择：{chosen['vector_weight']}:{chosen['bm25_weight']}；生产配置未修改")
+    ids, docs, metas = retrieval._corpus()
+    corpus = sorted(zip(ids, docs, metas), key=lambda row: row[0])
+    fingerprint = lambda value: hashlib.sha256(
+        json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    report = {
+        "date": datetime.now(timezone.utc).isoformat(), "provenance": provenance(),
+        "selection": "dev recall3, then mrr10, then GRID order",
+        "production_top_k": 3, "diagnostic_top_k": 10, "tenant": "public",
+        "dataset_sha256": fingerprint(retrieval_cases()),
+        "corpus_sha256": fingerprint(corpus), "chunks": len(ids),
+        "dev_ids": [c["id"] for c in dev], "holdout_ids": [c["id"] for c in holdout],
+        "dev": rows, "selected": [chosen["vector_weight"], chosen["bm25_weight"]],
+        "holdout": None,
+    }
+    if args.holdout:
+        report["holdout"] = score(*report["selected"], holdout)
+        report["holdout_baseline"] = score(1.0, 0.0, holdout)
+        print("固定权重 holdout R@3:", f"{report['holdout']['recall3']:.2%}")
+        print("固定纯向量 holdout R@3:", f"{report['holdout_baseline']['recall3']:.2%}")
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report
 
 
 if __name__ == "__main__":

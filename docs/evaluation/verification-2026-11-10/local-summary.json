@@ -1,0 +1,237 @@
+{
+  "date": "2026-11-10T11:24:46.264972+00:00",
+  "provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+  },
+  "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+  "executable": "<repo>\\work\\test-env\\Scripts\\python.exe",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "directory": "<repo>\\work\\priority-one-final\\run-3h2kfy8i",
+  "with_model": true,
+  "stages": [
+    {
+      "name": "dependencies",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0,
+      "seconds": 1.09,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "packages",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0,
+      "seconds": 0.97,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "fresh-index",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-c",
+        "import rag; rag.build_index()"
+      ],
+      "exit_code": 0,
+      "seconds": 16.43,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "pytest",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pytest",
+        "-o",
+        "addopts=",
+        "-m",
+        "not llm",
+        "-q",
+        "--junitxml=<repo>\\work\\priority-one-final\\run-3h2kfy8i\\pytest.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 107.92,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "actions",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "action_eval.py",
+        "--output",
+        "<repo>\\work\\priority-one-final\\run-3h2kfy8i\\actions.json"
+      ],
+      "exit_code": 0,
+      "seconds": 23.7,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "tasks",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "task_eval.py",
+        "--repeat",
+        "3",
+        "--output",
+        "<repo>\\work\\priority-one-final\\run-3h2kfy8i\\tasks.json"
+      ],
+      "exit_code": 0,
+      "seconds": 3.67,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "refresh-index",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-c",
+        "import rag; rag.build_index()"
+      ],
+      "exit_code": 0,
+      "seconds": 19.89,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "rrf",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "tune_rrf.py",
+        "--holdout",
+        "--output",
+        "<repo>\\work\\priority-one-final\\run-3h2kfy8i\\rrf.json"
+      ],
+      "exit_code": 0,
+      "seconds": 35.52,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "evidence-live",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "scripts/probe_evidence.py",
+        "--output",
+        "<repo>\\work\\priority-one-final\\run-3h2kfy8i\\evidence-live.json"
+      ],
+      "exit_code": 0,
+      "seconds": 8.02,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "model-actions",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "action_eval.py",
+        "--with-model",
+        "--output",
+        "<repo>\\work\\priority-one-final\\run-3h2kfy8i\\model-actions.json"
+      ],
+      "exit_code": 0,
+      "seconds": 83.65,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "acceptance",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "scripts/acceptance_e2e.py",
+        "--output",
+        "<repo>\\work\\priority-one-final\\run-3h2kfy8i\\acceptance.json"
+      ],
+      "exit_code": 0,
+      "seconds": 67.69,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    }
+  ],
+  "docker": {
+    "daemon_available": true,
+    "container_acceptance": "not_run"
+  },
+  "completed_at": "2026-11-10T11:30:55.934021+00:00",
+  "source_unchanged": true
+}

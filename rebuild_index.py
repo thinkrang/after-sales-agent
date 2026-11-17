@@ -25,7 +25,7 @@ import hashlib
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from rag import get_vector_store, load_documents, tenant_from_filename
+from rag import _invalidate_bm25, get_vector_store, load_documents, tenant_from_filename
 
 CHUNK_SIZE = 300
 CHUNK_OVERLAP = 50
@@ -96,6 +96,7 @@ def main():
     store.add_documents(chunks)
     if uploaded:
         store.add_documents(uploaded)
+    _invalidate_bm25()
     print("[3/4] 集合已重建")
 
     # ---------- 4. 校验 ----------

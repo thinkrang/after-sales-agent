@@ -226,6 +226,25 @@ def test_init_is_idempotent(db):
     assert db.list_tickets() == []
 
 
+def test_actionable_filters_run_before_limit(db):
+    target = db.create_ticket(thread_id="old", order_id="old", tenant_id="acme",
+                              requester_id="customer", required_role="approver")
+    for i in range(8):
+        history = db.create_ticket(thread_id=f"h{i}", order_id=f"h{i}",
+                                   tenant_id="acme", requester_id="customer",
+                                   required_role="approver")
+        db.reject_ticket(history["id"])
+        db.create_ticket(thread_id=f"low{i}", order_id=f"low{i}", tenant_id="acme",
+                         requester_id="customer", required_role="customer")
+        db.create_ticket(thread_id=f"own{i}", order_id=f"own{i}", tenant_id="acme",
+                         requester_id="approver", required_role="approver")
+        db.create_ticket(thread_id=f"other{i}", order_id=f"other{i}", tenant_id="globex",
+                         requester_id="customer", required_role="approver")
+    result = db.list_tickets(limit=1, tenant_id="acme", status=db.PENDING,
+                              required_role="approver", exclude_requester_id="approver")
+    assert [t["id"] for t in result] == [target["id"]]
+
+
 def test_old_ticket_schema_is_migrated_without_losing_audit_rows(
     tmp_path, monkeypatch
 ):

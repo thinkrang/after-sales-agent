@@ -21,8 +21,9 @@ TRANSIENT = "transient"
 CONFLICT = "conflict"
 INVALID_ARGS = "invalid_args"
 NO_EVIDENCE = "no_evidence"
+OUTCOME_UNKNOWN = "outcome_unknown"
 
-CODES = frozenset({NOT_FOUND, DENIED, TRANSIENT, CONFLICT, INVALID_ARGS, NO_EVIDENCE})
+CODES = frozenset({NOT_FOUND, DENIED, TRANSIENT, CONFLICT, INVALID_ARGS, NO_EVIDENCE, OUTCOME_UNKNOWN})
 
 # 只有临时故障值得重试。not_found 重试一百次还是找不到，
 # 反而会触发循环边界，把一次本可以追问的交互变成一次"停止"。

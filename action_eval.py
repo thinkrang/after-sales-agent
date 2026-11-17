@@ -35,6 +35,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
+import sys
 import shutil
 import tempfile
 import threading
@@ -657,11 +659,11 @@ def run(scenarios: list[Scenario], *, verbose: bool = True) -> Report:
                 except Exception as exc:  # noqa: BLE001
                     outcome = Outcome(False, f"场景本身抛异常：{type(exc).__name__}: {exc}")
             finally:
-                shutil.rmtree(tmp, ignore_errors=True)
                 db.release_all()
+                shutil.rmtree(tmp)
             report.add(s, outcome)
             if verbose:
-                mark = "✓" if outcome.ok else ("☠" if outcome.danger else "✗")
+                mark = "PASS" if outcome.ok else ("DANGER" if outcome.danger else "FAIL")
                 print(f"  {mark} [{s.id}] {s.description:<32} {outcome.detail}")
     finally:
         tickets.DB_PATH = saved["tickets"]
@@ -695,22 +697,62 @@ def print_summary(report: Report) -> int:
     if report.dangerous:
         print("\n  危险动作（必须为 0）：")
         for s, o in report.dangerous:
-            print(f"    ☠ [{s.id}] {s.description} —— {o.detail}")
+            print(f"    DANGER [{s.id}] {s.description} —— {o.detail}")
 
     others = [(s, o) for s, o in report.failed if not o.danger]
     if others:
         print("\n  其他未通过：")
         for s, o in others:
-            print(f"    ✗ [{s.id}] {s.description} —— {o.detail}")
+            print(f"    FAIL [{s.id}] {s.description} —— {o.detail}")
 
     print("=" * 72)
     return 0 if not report.failed else 1
+
+
+def run_model_scenarios(report: Report) -> None:
+    """子进程失败、缺场景或输出损坏均计为失败，不能让缺失结果变成全绿。"""
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-X", "utf8", str(Path(__file__).parent / "action_eval_model.py"), "--json"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900,
+        )
+        rows = None
+        for line in (proc.stdout or "").splitlines():
+            try:
+                value = json.loads(line.strip())
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, list):
+                rows = value
+        expected = {f"M{i:02}" for i in range(1, 9)}
+        valid = (
+            isinstance(rows, list) and len(rows) == len(expected)
+            and all(isinstance(r, dict) and expected.issuperset({r.get("id")})
+                    and {"category", "description", "detail"}.issubset(r)
+                    and all(isinstance(r[k], str) for k in ("category", "description", "detail"))
+                    and type(r.get("ok")) is bool and type(r.get("danger")) is bool
+                    for r in rows)
+            and {r["id"] for r in rows} == expected
+        )
+        if not valid:
+            raise RuntimeError(f"模型评测结果缺失或格式错误，exit={proc.returncode}")
+        for r in rows:
+            report.add(
+                Scenario(r["id"], r["category"], r["description"], lambda: None),
+                Outcome(r["ok"] and not r["danger"], r["detail"], r["danger"]),
+            )
+        if proc.returncode != 0 and all(r["ok"] and not r["danger"] for r in rows):
+            raise RuntimeError(f"模型子进程非正常退出，exit={proc.returncode}")
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        report.add(Scenario("MODEL_RUN", "评测运行", "模型评测未完整运行", lambda: None),
+                   Outcome(False, str(exc)))
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--with-model", action="store_true",
                     help="额外跑需要真实模型的行为场景（慢、有成本）")
+    ap.add_argument("--output", type=Path, help="保存带源码指纹的逐场景 JSON")
     args = ap.parse_args()
 
     print("=" * 72)
@@ -722,33 +764,25 @@ def main() -> int:
         print("\n" + "=" * 72)
         print("模型行为场景（独立进程，因为 api 在 import 时绑定数据库路径）")
         print("=" * 72)
-        import subprocess
-        import sys as _sys
+        run_model_scenarios(report)
+        for s, outcome in report.rows:
+            if s.id.startswith("M"):
+                mark = "PASS" if outcome.ok else ("DANGER" if outcome.danger else "FAIL")
+                print(f"  {mark} [{s.id}] {s.description} {outcome.detail}")
 
-        proc = subprocess.run(
-            [_sys.executable, str(Path(__file__).parent / "action_eval_model.py"), "--json"],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore",
-        )
-        rows = []
-        for line in (proc.stdout or "").splitlines():
-            line = line.strip()
-            if line.startswith("["):
-                try:
-                    rows = json.loads(line)
-                except json.JSONDecodeError:
-                    pass
-        if not rows:
-            print("  模型场景执行失败：")
-            print((proc.stderr or proc.stdout or "")[-600:])
-        for r in rows:
-            mark = "✓" if r["ok"] else ("☠" if r["danger"] else "✗")
-            print(f"  {mark} [{r['id']}] {r['description']:<28} {r['detail']}")
-            report.add(
-                Scenario(r["id"], r["category"], r["description"], lambda: None),
-                Outcome(r["ok"], r["detail"], r["danger"]),
-            )
-
-    return print_summary(report)
+    code = print_summary(report)
+    if args.output:
+        from task_eval import provenance
+        from datetime import datetime, timezone
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps({
+            "date": datetime.now(timezone.utc).isoformat(), "provenance": provenance(),
+            "with_model": args.with_model, "passed": report.count()[0],
+            "total": report.count()[1], "dangerous": len(report.dangerous),
+            "rows": [dict(id=s.id, category=s.category, description=s.description,
+                          ok=o.ok, danger=o.danger, detail=o.detail) for s, o in report.rows],
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+    return code
 
 
 if __name__ == "__main__":

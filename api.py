@@ -7,7 +7,7 @@
 - 前端不再需要手输 thread_id：所有会话由 /sessions 接口下发，点击即切换
 """
 from __future__ import annotations
-from evidence import verify_evidence
+from evidence import cited_evidence, verify_evidence
 
 
 import hashlib
@@ -16,11 +16,13 @@ import logging
 import os
 import sqlite3
 import time
+import threading
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import perf
 
@@ -64,10 +66,16 @@ from auth import (
 import orders
 import refund_service
 import refund_tasks
+import plan_store
+import orchestrator
+from planning import PlanDraft, PLAN_INSTRUCTIONS
 import refund_flow
 import tickets
 import long_memory
 import tool_result
+import voucher_disputes
+import agent_runtime
+from voucher_api import router as voucher_router
 from agent_context import ContextBoundary
 from session_guard import conversation_lock
 from tickets import (
@@ -323,8 +331,9 @@ def migrate_threads(agent) -> None:
             row["id"] for row in conn.execute("SELECT id FROM sessions").fetchall()
         }
     added = 0
+    closed = tickets.closed_conversation_ids()
     for tid in ids:
-        if tid in known:
+        if tid in known or tid in closed:
             continue
         now = _now()
         with db.session(SESSION_DB) as conn:
@@ -405,7 +414,7 @@ def search_shop_info(question: str, config: RunnableConfig) -> str:
             "证据核查已通过。\n"
             "请仅根据以下知识库材料回答，"
             "并尽量标注来源：\n\n"
-            + format_evidence(results)
+            + format_evidence(cited_evidence(verdict, results))
         )
 
     # 3. 核查不通过：采取保守策略
@@ -474,11 +483,78 @@ def get_order_info(order_id: str, config: RunnableConfig) -> str:
 
 
 @tool
+def check_voucher_redemption(voucher_id: str, config: RunnableConfig, store_code: str | None = None,
+                             visit_at: str | None = None) -> str:
+    """只读核查本人团购券。到店场景可传门店编号和带时区的 ISO 到店时间。"""
+    try:
+        arrival = datetime.fromisoformat(visit_at) if visit_at else None
+        if arrival and arrival.utcoffset() is None:
+            raise ValueError("timezone required")
+    except ValueError:
+        return tool_result.fail(tool_result.INVALID_ARGS, "到店时间需包含日期和时区，例如 +08:00")
+    try:
+        store = store_code.strip().upper() if store_code else None
+        result = voucher_disputes.inspect_visit(_user_from_config(config), voucher_id, store, arrival)
+    except voucher_disputes.NotFound:
+        return tool_result.fail(tool_result.NOT_FOUND, "券不存在或不属于当前账号，请核对券号")
+    query = {"voucher": result["voucher"]["voucher_id"]}
+    if store and (store == "OTHER" or any(item["code"] == store for item in result["visit"]["stores"])):
+        query["store"] = store
+        query["arrival"] = result["visit"]["visit_at"]
+    result["help_url"] = "/voucher-center?" + urlencode(query)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@tool
 def get_refund_task(config: RunnableConfig) -> str:
     """读取当前会话的退款任务、版本、缺失信息和审批/执行状态。"""
     return json.dumps(refund_tasks.get(
         _user_from_config(config), str(config["configurable"]["thread_id"])
     ), ensure_ascii=False)
+
+
+@tool
+def get_refund_plan(config: RunnableConfig) -> str:
+    """读取当前会话的多笔计划、任务标识、版本、依赖、等待原因和执行结果。"""
+    return json.dumps(plan_store.get(_user_from_config(config), str(config["configurable"]["thread_id"])), ensure_ascii=False)
+
+
+@tool
+def create_refund_plan(draft: PlanDraft, config: RunnableConfig) -> str:
+    """为至多两笔退款制定结构化任务计划；只提议申请，不批准退款。
+
+    用户同时处理多笔时使用。先读取计划；tasks 只含用户明确提供的订单和原因，
+    缺失字段留空，咨询 intent=consult，明确申请才是 apply。
+    为每笔生成 lookup_order -> check_policy -> request_refund 三个步骤及依赖，
+    不同任务默认独立；等待审批和执行由服务器添加。不可编造金额、租户、审批。
+    已有计划时用 edit_refund_plan_task 局部修改，不重建整个计划。
+    """
+    cfg = config["configurable"]
+    user, sid = _user_from_config(config), str(cfg["thread_id"])
+    try:
+        plan_store.create(user, sid, draft, request_id=str(cfg.get("turn_id") or ""))
+        return json.dumps(orchestrator.run(user, sid), ensure_ascii=False)
+    except (ValueError, orders.OrderNotFound) as exc:
+        return tool_result.fail(tool_result.INVALID_ARGS, "计划未接受；根据错误核实信息，不要重复提交相同计划", detail=str(exc))
+
+
+@tool
+def edit_refund_plan_task(task_id: str, expected_revision: int, config: RunnableConfig,
+                          order_id: str | None = None, reason: str | None = None,
+                          intent: str | None = None, cancel: bool = False) -> str:
+    """按任务标识局部重规划：补信息、修改或撤回指定的一笔；先读计划取得该任务版本。
+
+    expected_revision 是 tasks[].state.revision。用户明确更正才修改；含糊则追问。
+    换订单清除旧原因，旧审批失效；不重做其他已完成任务。自然语言同意不能批准。
+    """
+    cfg = config["configurable"]
+    user, sid = _user_from_config(config), str(cfg["thread_id"])
+    try:
+        plan_store.edit(user, sid, task_id, expected_revision=expected_revision, order_id=order_id,
+                        reason=reason, intent=intent, cancel=cancel, request_id=str(cfg.get("turn_id") or ""))
+        return json.dumps(orchestrator.run(user, sid), ensure_ascii=False)
+    except (ValueError, orders.OrderNotFound) as exc:
+        return tool_result.fail(tool_result.CONFLICT, "修改未接受；重新读取计划并核实指定任务", detail=str(exc))
 
 
 @tool
@@ -493,6 +569,8 @@ def update_refund_task(
     仅咨询必须用 consult；明确申请才用 apply。取消用 cancel=true。
     插话查询物流等不修改此任务。不确定用户是否改口时先追问。
     """
+    if plan_store.get(_user_from_config(config), str(config["configurable"]["thread_id"])):
+        return tool_result.fail(tool_result.CONFLICT, "本会话有多笔计划，请用 edit_refund_plan_task 指定任务")
     try:
         task = refund_tasks.update(
             _user_from_config(config), str(config["configurable"]["thread_id"]),
@@ -563,6 +641,8 @@ def submit_refund_request(
     """
     user = _user_from_config(config)
     tid = str(config["configurable"]["thread_id"])
+    if plan_store.get(user, tid):
+        return tool_result.fail(tool_result.CONFLICT, "本会话有多笔计划，请用 edit_refund_plan_task 指定任务")
     try:
         if not refund_tasks.get(user, tid)["revision"]:
             raise refund_tasks.TaskConflict("请先登记退款任务并明确申请意图")
@@ -671,9 +751,8 @@ async def lifespan(app: FastAPI):
     if not api_key:
         raise RuntimeError("请在 .env 中配置 DEEPSEEK_API_KEY")
 
-    init_auth_db(
-        seed_demo_users=os.getenv("AUTH_SEED_DEMO_USERS", "1") != "0"
-    )
+    seed_demo_users = os.getenv("AUTH_SEED_DEMO_USERS", "1") != "0"
+    init_auth_db(seed_demo_users=seed_demo_users)
     if using_demo_secret():
         logging.warning(
             "AUTH_SECRET 未配置，正在使用仅供本地演示的默认签名密钥"
@@ -681,6 +760,8 @@ async def lifespan(app: FastAPI):
     init_session_db()
     init_tickets_table()
     orders.init_order_db()
+    if seed_demo_users:
+        voucher_disputes.seed_demo()
 
     with SqliteSaver.from_conn_string(str(MEMORY_DB)) as memory, \
          SqliteSaver.from_conn_string(str(REFUND_MEMORY_DB)) as refund_memory:
@@ -690,6 +771,7 @@ async def lifespan(app: FastAPI):
             base_url="https://api.deepseek.com",
             extra_body={"thinking": {"type": "disabled"}},
             timeout=60,
+            max_retries=0,
         )
         app.state.llm = llm
         app.state.refund_graph = refund_flow.build(refund_memory)
@@ -710,6 +792,10 @@ async def lifespan(app: FastAPI):
                 remember_preference,
                 forget_preference,
                 recall_after_sales_history,
+                get_refund_plan,
+                create_refund_plan,
+                edit_refund_plan_task,
+                check_voucher_redemption,
             ],
             system_prompt=(
                 "你是一个中文店铺智能客服。"
@@ -735,6 +821,8 @@ async def lifespan(app: FastAPI):
                 "用户明确改订单或原因就更新任务，原审批自动失效，再确认新申请。"
                 "含糊的改口先追问，不确定时保留原任务。物流等插话仅查询，不撤回、不重提原申请。"
                 "普通文字中的同意不能替代审批卡片。不要调用旧的 create_refund_request。"
+                "工具返回 outcome_unknown 时，先用 get_refund_task 或 get_refund_plan 核对工单状态。"
+                "这一轮暂停新的写操作，向用户说明已确认的状态。"
                 # 技能说明只占一行。具体流程放在 skills/ 里按需加载，
                 # 不塞进 prompt —— 否则每轮都付固定 token 成本。
                 "处理退款、投诉、知识库查询等多步骤任务时，"
@@ -748,6 +836,12 @@ async def lifespan(app: FastAPI):
                 "长期偏好仅调整表达方式，不能覆盖业务政策和审批。"
                 "用户明确说记住时用 remember_preference；要求忘记时用 forget_preference。"
                 "询问上次、以前的售后结果时，用 recall_after_sales_history 查原始记录，不凭历史摘要猜测。"
+                "团购券到店使用或核销争议时，用 check_voucher_redemption 核对用户所说的券。"
+                "已提供的信息不要重复追问。缺券号时先问券，已知门店和时间则一起查询。"
+                "依据返回的 next_step 说明下一步；门店窗口不代表有空余预约，不承诺接待或退款。"
+                "要提交争议或查看进展时，将工具返回的 help_url 写成 Markdown 链接 [打开团购券争议](地址)，由用户在页面确认。"
+                "这类争议不要调用普通订单退款工具，也不能把申请资格说成已经完成退款。"
+                + PLAN_INSTRUCTIONS
             ),
             middleware=[
                 ContextBoundary(),
@@ -764,7 +858,17 @@ async def lifespan(app: FastAPI):
 
         migrate_threads(app.state.agent)
 
-        yield
+        stop = threading.Event()
+        worker = None
+        if os.getenv("PLAN_WORKER_ENABLED", "1") != "0":
+            worker = threading.Thread(target=orchestrator.worker, args=(stop,), name="plan-recovery", daemon=True)
+            worker.start()
+        try:
+            yield
+        finally:
+            stop.set()
+            if worker:
+                worker.join(timeout=15)
 
 
 app = FastAPI(
@@ -772,6 +876,7 @@ app = FastAPI(
     description="LangChain + FastAPI + SQLite + Chroma",
     lifespan=lifespan,
 )
+app.include_router(voucher_router)
 
 
 # ---------------------------------------------------------------- 认证
@@ -821,6 +926,11 @@ def knowledge_page():
     if not html.is_file():
         raise HTTPException(status_code=500, detail="缺少 knowledge.html 文件")
     return FileResponse(html, media_type="text/html")
+
+
+@app.get("/voucher-center")
+def voucher_center():
+    return FileResponse(BASE_DIR / "voucher_center.html", media_type="text/html")
 
 
 @app.get("/health")
@@ -985,7 +1095,15 @@ def decide_ticket(ticket_id: str, request: TicketDecisionRequest, user: CurrentU
     # 把发起人的会话从悬空中断里恢复出来。失败不影响退款本身——
     # 钱已经退完了，只是客户会话里少一句收尾说明，不能因此报错给审批人。
     try:
-        _resume_requester_thread(ticket, request.decision, request.message)
+        if ticket.get("approval_protocol") == "detached":
+            if outcome.status != "approved":
+                ticket = refund_flow.settle(app.state.refund_graph, ticket)
+            requester = User(ticket["requester_id"], ticket["requester_id"],
+                             ticket["tenant_id"], frozenset({"customer"}))
+            orchestrator.run(requester, plan_store.conversation_for(ticket))
+            ticket = tickets.get_ticket(ticket["id"])
+        else:
+            _resume_requester_thread(ticket, request.decision, request.message)
     except Exception:  # noqa: BLE001
         session_synced = False
         logging.exception("恢复发起人会话失败 ticket=%s", ticket_id)
@@ -1098,20 +1216,23 @@ def api_rename_session(sid: str, body: RenameSessionRequest, user: CurrentUser):
 
 @app.delete("/sessions/{sid}")
 def api_delete_session(sid: str, user: CurrentUser):
-    session = get_session(sid)
-    if session is not None:
-        require_session_access(sid, user)
-    remove_session_row(sid)
-    try:
-        app.state.memory.delete_thread(sid)
-    except Exception:
-        logging.warning("删除会话记忆失败：%s", sid, exc_info=True)
+    with conversation_lock("dialogue:" + sid):
+        if get_session(sid) is None:
+            return {"message": "会话已删除", "id": sid}
+        session = require_session_access(sid, user)
+        if not tickets.close_conversation(session["tenant_id"], session["user_id"], sid):
+            raise HTTPException(status_code=409, detail="还有退款待确认、待审批或正在处理，请先撤回待审批申请或等待处理完成")
+        remove_session_row(sid)
+        try:
+            app.state.memory.delete_thread(sid)
+        except Exception:
+            logging.warning("删除会话记忆失败：%s", sid, exc_info=True)
     return {"message": "会话已删除", "id": sid}
 
 
 @app.get("/sessions/{sid}/messages")
 def api_session_messages(sid: str, user: CurrentUser):
-    require_session_access(sid, user)
+    session = require_session_access(sid, user)
     config = {
         "configurable": {
             "thread_id": sid,
@@ -1128,14 +1249,22 @@ def api_session_messages(sid: str, user: CurrentUser):
     except Exception:
         logging.exception("读取会话历史失败")
         raw = []
+    seen = {getattr(msg, "id", None) for msg in raw}
+    receipts = tickets.conversation_receipts(session["tenant_id"], session["user_id"], sid)
+    messages = serialize_messages(raw)
+    # Older versions inserted receipts in the checkpoint. Keep their location
+    # and project only receipts that are not already in the chat.
+    messages.extend({"role": "assistant", "text": _refund_outcome_text(ticket)}
+                    for ticket in receipts if "refund-outcome-" + ticket["id"] not in seen)
     return {
         "id": sid,
-        "messages": serialize_messages(raw),
+        "messages": messages,
         # 刷新页面时若仍有挂起的审批，前端要能重新弹出确认卡片。
         # 否则用户会看到"对话卡住"却找不到入口继续 —— 这是恢复流程里
         # 最容易漏掉的一环：卡片是前端状态，刷新就没了，但图还停在中断点。
         "pending": _pending_actions(config),
         "refund_task": refund_tasks.get(user, sid),
+        "refund_plan": plan_store.get(user, sid),
     }
 
 
@@ -1182,6 +1311,8 @@ def get_session_refund_task(sid: str, user: CurrentUser):
 @app.patch("/sessions/{sid}/refund-task")
 def edit_session_refund_task(sid: str, body: RefundTaskUpdate, user: CurrentUser):
     require_session_access(sid, user)
+    if plan_store.get(user, sid):
+        raise HTTPException(status_code=409, detail="请在多笔计划中指定要修改的任务")
     try:
         task = refund_tasks.update(user, sid, **body.model_dump(), source="ui")
         _settle_revoked_flows(user, sid)
@@ -1196,6 +1327,54 @@ def edit_session_refund_task(sid: str, body: RefundTaskUpdate, user: CurrentUser
 def task_history(sid: str, user: CurrentUser, after: int = 0):
     require_session_access(sid, user)
     events = refund_tasks.history(user, sid, after=max(after, 0))
+    return {"events": events, "next_cursor": events[-1]["id"] if events else max(after, 0)}
+
+
+@app.get("/sessions/{sid}/plan")
+def read_plan(sid: str, user: CurrentUser):
+    require_session_access(sid, user)
+    plan = plan_store.get(user, sid)
+    if plan:
+        plan["pending"] = [_action_from_ticket(tickets.get_ticket(t["state"]["ticket_id"]), user)
+                           for t in plan["tasks"] if t["state"]["status"] == "pending_approval"]
+    return plan
+
+
+@app.post("/sessions/{sid}/plan")
+def create_plan(sid: str, body: PlanDraft, user: CurrentUser):
+    require_session_access(sid, user)
+    try:
+        plan_store.create(user, sid, body)
+        return orchestrator.run(user, sid)
+    except orders.OrderNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/sessions/{sid}/plan/run")
+def advance_plan(sid: str, user: CurrentUser):
+    require_session_access(sid, user)
+    return orchestrator.run(user, sid)
+
+
+@app.patch("/sessions/{sid}/plan/tasks/{task_id}")
+def edit_plan_task(sid: str, task_id: str, body: RefundTaskUpdate, user: CurrentUser):
+    require_session_access(sid, user)
+    try:
+        plan_store.edit(user, sid, task_id, **body.model_dump())
+        _settle_revoked_flows(user, sid)
+        return orchestrator.run(user, sid)
+    except orders.OrderNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/sessions/{sid}/plan/events")
+def plan_events(sid: str, user: CurrentUser, after: int = 0):
+    require_session_access(sid, user)
+    events = plan_store.history(user, sid, after=after)
     return {"events": events, "next_cursor": events[-1]["id"] if events else max(after, 0)}
 
 
@@ -1329,6 +1508,7 @@ def _chat_unlocked(request: ChatRequest, user: User):
         # concurrently. Approval updates use the same conversation guard.
         pending = _recover_changed_task(config, _pending_actions(config))
         if pending:
+            agent_runtime.emit(config["configurable"], "request_end", outcome="waiting_approval", transport="http")
             return {"thread_id": request.thread_id, "interrupt": {
                 "thread_id": request.thread_id,
                 "actions": _prepare_approval_actions(pending, config),
@@ -1342,6 +1522,7 @@ def _chat_unlocked(request: ChatRequest, user: User):
         if actions:
             actions = _prepare_approval_actions(actions, config)
             touch_session(request.thread_id, request.message, user=user)
+            agent_runtime.emit(config["configurable"], "request_end", outcome="waiting_approval", transport="http")
             return {
                 "thread_id": request.thread_id,
                 "interrupt": {
@@ -1351,15 +1532,18 @@ def _chat_unlocked(request: ChatRequest, user: User):
             }
         touch_session(request.thread_id, request.message, user=user)
         answer = _extract_text(result["messages"][-1].content)
+        agent_runtime.emit(config["configurable"], "request_end", outcome="response_sent", transport="http")
         return {"thread_id": request.thread_id, "answer": answer}
     except GraphRecursionError:
         # 中间件通常先在 10 次模型调用处停下；这里是 40 步递归的最终兜底。
         # 两者都必须给出可读出口，不能让用户看到"Agent 调用失败"。
         logging.warning("Agent 达到递归上限 thread=%s", request.thread_id)
         touch_session(request.thread_id, request.message, user=user)
+        agent_runtime.emit(config["configurable"], "request_end", outcome="recursion_limit", transport="http")
         return {"thread_id": request.thread_id, "answer": _RECURSION_MESSAGE}
     except Exception as e:
         logging.exception("Agent 执行失败")
+        agent_runtime.emit(config["configurable"], "request_end", outcome="error", transport="http")
         raise HTTPException(status_code=502, detail="Agent 调用失败，请查看服务端日志。") from e
 
 
@@ -1390,9 +1574,12 @@ def _pending_actions(config: dict) -> list[dict]:
         with db.session(tickets.DB_PATH) as conn:
             pending = conn.execute("""
                 SELECT * FROM refund_tickets WHERE tenant_id=? AND requester_id=?
-                AND thread_id=? AND status='pending_approval' AND approval_protocol='detached'
+                AND (thread_id=? OR thread_id IN (
+                    SELECT b.scope_thread_id FROM agent_plan_tasks b JOIN agent_plans p ON p.id=b.plan_id
+                    WHERE p.tenant_id=? AND p.requester_id=? AND p.conversation_id=?))
+                AND status='pending_approval' AND approval_protocol='detached'
                 ORDER BY created_at DESC, rowid DESC
-            """, (user.tenant_id, user.username, thread_id)).fetchall()
+            """, (user.tenant_id, user.username, thread_id, user.tenant_id, user.username, thread_id)).fetchall()
         return [_action_from_ticket(dict(t), user) for t in pending]
     get_state = getattr(app.state.agent, "get_state", None)
     if not callable(get_state):
@@ -1448,6 +1635,8 @@ def _legacy_interrupted(config: dict) -> bool:
 def _action_from_ticket(ticket: dict, user: User) -> dict:
     order = orders.get_order(user, ticket["order_id"])
     return {"name": "create_refund_request", "protocol": "detached",
+            "scope_thread_id": ticket["thread_id"],
+            "task_id": plan_store.task_for_scope(user, plan_store.conversation_for(ticket), ticket["thread_id"]),
             "args": {"order_id": ticket["order_id"], "reason": ticket["reason"],
                      "task_revision": ticket.get("task_revision")},
             "approval_id": ticket["id"], "amount_cents": ticket["amount_cents"],
@@ -1462,8 +1651,11 @@ def _settle_revoked_flows(user: User, thread_id: str) -> None:
     with db.session(tickets.DB_PATH) as conn:
         rows = conn.execute("""
             SELECT * FROM refund_tickets WHERE tenant_id=? AND requester_id=?
-              AND thread_id=? AND status='rejected' AND approval_protocol='detached'
-        """, (user.tenant_id, user.username, thread_id)).fetchall()
+              AND (thread_id=? OR thread_id IN (
+                SELECT b.scope_thread_id FROM agent_plan_tasks b JOIN agent_plans p ON p.id=b.plan_id
+                WHERE p.tenant_id=? AND p.requester_id=? AND p.conversation_id=?))
+              AND status='rejected' AND approval_protocol='detached'
+        """, (user.tenant_id, user.username, thread_id, user.tenant_id, user.username, thread_id)).fetchall()
     for row in rows:
         try:
             refund_flow.settle(graph, dict(row))
@@ -1542,6 +1734,8 @@ def _refund_outcome_text(ticket: dict) -> str:
                 f"金额 {ticket['amount_cents'] / 100:.2f} 元。")
     if ticket["status"] == "rejected":
         return f"订单 {ticket['order_id']} 的退款申请已拒绝或撤回，未执行退款。"
+    if ticket["status"] == "failed":
+        return f"订单 {ticket['order_id']} 的退款处理未完成，请联系人工核实。"
     return f"订单 {ticket['order_id']} 的退款当前状态为 {ticket['status']}，请等待核实结果。"
 
 
@@ -1560,22 +1754,16 @@ def _resume_requester_thread(ticket: dict, decision: str, message: str | None = 
     让中间件补上工具结果，图正常收尾。批准时工具会再跑一遍，但下游以工单 ID
     为幂等键，只会返回原退款单号。
     """
+    conversation_id = plan_store.conversation_for(ticket)
     config = {
         "configurable": {
-            "thread_id": ticket["thread_id"],
+            "thread_id": conversation_id,
             "tenant": ticket["tenant_id"],
             "user_id": ticket["requester_id"],
             "display_name": ticket["requester_id"],
             "roles": ["customer"],
         }
     }
-    if ticket.get("approval_protocol") == "detached":
-        ticket = refund_flow.settle(app.state.refund_graph, ticket)
-        with conversation_lock("dialogue:" + ticket["thread_id"]):
-            app.state.agent.update_state(config, {"messages": [AIMessage(
-                id="refund-outcome-" + ticket["id"], content=_refund_outcome_text(ticket)
-            )]})
-        return
     payload = {"type": decision}
     if message:
         payload["message"] = message
@@ -1614,8 +1802,27 @@ def _recover_changed_task(config: dict, pending: list[dict]) -> list[dict]:
 
 
 def _stream_agent(payload, config: dict, title_source: str | None = None):
-    with conversation_lock("dialogue:" + str(config["configurable"]["thread_id"])):
-        yield from _stream_agent_unlocked(payload, config, title_source)
+    cfg = config["configurable"]
+    sid = str(cfg["thread_id"])
+    outcome = "stream_interrupted"
+    try:
+        with conversation_lock("dialogue:" + sid):
+            if not get_session(sid):
+                outcome = "session_closed"
+                yield _sse("error", {"message": "会话已关闭，请打开新的会话"})
+                return
+            events = _stream_agent_unlocked(payload, config, title_source)
+            with closing(events):
+                for event in events:
+                    if event.startswith("event: done\n"):
+                        outcome = "response_sent"
+                    elif event.startswith("event: interrupt\n"):
+                        outcome = "waiting_approval"
+                    elif event.startswith("event: error\n"):
+                        outcome = "error"
+                    yield event
+    finally:
+        agent_runtime.emit(cfg, "request_end", outcome=outcome, transport="sse")
 
 
 def _stream_agent_unlocked(payload, config: dict, title_source: str | None = None):
@@ -1671,6 +1878,7 @@ def _stream_agent_unlocked(payload, config: dict, title_source: str | None = Non
                 "actions": actions,
                 "tenant": config["configurable"].get("tenant"),
                 "refund_task": refund_tasks.get(_user_from_config(config), thread_id),
+                "refund_plan": plan_store.get(_user_from_config(config), thread_id),
             })
             return
 
@@ -1724,6 +1932,7 @@ def _stream_agent_unlocked(payload, config: dict, title_source: str | None = Non
                 "actions": actions,
                 "tenant": config["configurable"].get("tenant"),
                 "refund_task": refund_tasks.get(_user_from_config(config), thread_id),
+                "refund_plan": plan_store.get(_user_from_config(config), thread_id),
             })
             return
 
@@ -1735,18 +1944,21 @@ def _stream_agent_unlocked(payload, config: dict, title_source: str | None = Non
         yield _sse("done", {
             "thread_id": thread_id, "title": title,
             "refund_task": refund_tasks.get(_user_from_config(config), thread_id),
+                "refund_plan": plan_store.get(_user_from_config(config), thread_id),
         })
 
     except GraphRecursionError:
         # 中间件在 10 次模型调用处就该停下；走到这里说明兜底被触发。
         # 仍然要按"正常回答"收尾：用户看到的是解释，不是系统故障。
         logging.warning("Agent 达到递归上限 thread=%s", thread_id)
+        agent_runtime.emit(config["configurable"], "turn_stop", reason="recursion_limit")
         yield _sse("token", {"text": _RECURSION_MESSAGE})
         try:
             title = touch_session(thread_id, title_source, user=_user_from_config(config))
             yield _sse("done", {
                 "thread_id": thread_id, "title": title,
                 "refund_task": refund_tasks.get(_user_from_config(config), thread_id),
+                "refund_plan": plan_store.get(_user_from_config(config), thread_id),
             })
         except Exception:
             logging.exception("递归上限收尾失败 thread=%s", thread_id)
@@ -1805,12 +2017,12 @@ def chat_resume(request: ResumeRequest, user: CurrentUser):
     }
 
     pending_actions = _pending_actions(config)
-    if not pending_actions and request.decision == "approve":
+    if request.decision == "approve" and not any(a.get("approval_id") == request.approval_id for a in pending_actions):
         recovering = tickets.get_ticket(request.approval_id, tenant_id=user.tenant_id, requester_id=user.username)
-        if (recovering and recovering["thread_id"] == request.thread_id
+        if (recovering and plan_store.conversation_for(recovering) == request.thread_id
                 and recovering.get("approval_protocol") == "detached"
                 and recovering["status"] in ("approved", "executing")):
-            pending_actions = [_action_from_ticket(recovering, user)]
+            pending_actions.append(_action_from_ticket(recovering, user))
     if not pending_actions:
         raise HTTPException(
             status_code=409,
@@ -1823,7 +2035,7 @@ def chat_resume(request: ResumeRequest, user: CurrentUser):
         args = action.get("args") or {}
         found = refund_service.find_action_ticket(
             user,
-            thread_id=request.thread_id,
+            thread_id=action.get("scope_thread_id") or request.thread_id,
             order_id=str(args.get("order_id") or ""),
             reason=str(args.get("reason") or ""),
         )
@@ -1837,7 +2049,7 @@ def chat_resume(request: ResumeRequest, user: CurrentUser):
         )
     ticket, _ = matched
 
-    task = refund_tasks.get(user, request.thread_id)
+    task = refund_tasks.get(user, ticket["thread_id"])
     if request.decision == "approve" and task["revision"] and (
         args.get("task_revision") != task["revision"]
         or task["cancelled"] or task["intent"] != "apply"
@@ -1853,7 +2065,7 @@ def chat_resume(request: ResumeRequest, user: CurrentUser):
             outcome = refund_service.decide(
                 user,
                 approval_id=request.approval_id,
-                thread_id=request.thread_id,
+                thread_id=ticket["thread_id"],
                 decision=request.decision,
             )
         except refund_service.ApprovalForbidden as exc:
@@ -1891,10 +2103,12 @@ def chat_resume(request: ResumeRequest, user: CurrentUser):
         if ticket.get("approval_protocol") == "detached":
             yield _sse("status", {"text": "正在处理审批结果..."})
             try:
-                current = refund_flow.settle(app.state.refund_graph, tickets.get_ticket(ticket["id"]))
-                _resume_requester_thread(current, request.decision, request.message)
+                refund_flow.settle(app.state.refund_graph, tickets.get_ticket(ticket["id"]))
+                orchestrator.run(user, request.thread_id)
+                current = tickets.get_ticket(ticket["id"])
                 yield _sse("token", {"text": _refund_outcome_text(current)})
                 yield _sse("done", {"thread_id": request.thread_id,
+                                    "refund_plan": plan_store.get(user, request.thread_id),
                                     "refund_task": refund_tasks.get(user, request.thread_id)})
             except Exception:
                 logging.exception("退款执行流程恢复失败 ticket=%s", ticket["id"])

@@ -56,7 +56,19 @@ SHOP_MCP_TOKEN="<token>" python mcp_server.py
 }
 ```
 
-token 通过 `POST /login` 获取，和 Web 端同一套身份系统。
+token 通过 `POST /auth/login` 获取，和 Web 端同一套身份系统。
+
+每笔订单拥有独立 `task_id`，不再共用一个会被覆盖的用户任务。
+`prepare_refund` 返回 `task_id`、`task_revision`、`approval_id` 和审批地址；
+重复提交相同申请复用待审批工单。修改已有任务时传回 `task_id` 和
+`expected_revision`，旧审批失效仅限该任务。
+`get_refund_task(task_id=...)` 读取一笔，不带标识时列出最近 20 笔 MCP 任务。
+
+审批交接到 Web 服务的 `POST /tickets/{approval_id}/decision`，body 为
+`{"decision":"approve"}` 或 `{"decision":"reject"}`，仍需 Bearer token。
+低风险由本人确认，高风险由同租户的其他审批人批准。MCP 不提供批准工具。
+Web 与 MCP 必须使用同一个 `AGENT_DATA_DIR` 和签名密钥；MCP 启动会初始化所需表。
+这些 MCP 任务独立于聊天计划，不把任意聊天会话标识当成 MCP 任务标识。
 
 ## 写操作为什么安全
 
@@ -68,7 +80,8 @@ token 通过 `POST /login` 获取，和 Web 端同一套身份系统。
 ## 已验证
 
 - 单元测试 `tests/test_mcp_tools.py`：无 token 拒绝、token 决定租户、
-  跨租户查单返回 `not_found`、写操作只创建待审批且执行次数为 0、线程名稳定。
+  跨租户查单返回 `not_found`、写操作只创建待审批且执行次数为 0、线程名稳定、
+  双申请互不覆盖、相同申请幂等、修改要求版本。
 - 端到端：启动 streamable-http 服务，用官方客户端带 token 调用 5 个工具，
   `A100` 返回订单与退款资格，`A999` 返回 `not_found`。
 

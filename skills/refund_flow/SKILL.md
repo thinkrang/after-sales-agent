@@ -17,6 +17,19 @@ description: 处理退款、退货、退钱类请求时使用。包含订单信�
 
 ### 任务状态（每次处理退款先读取）
 
+用户一次提出两笔退款，或当前快照已有 `plan` 时，走多任务路径：
+
+- 先 `get_refund_plan`。首次用 `create_refund_plan(draft=...)` 提议结构化任务和步骤。
+- 每笔包含 `lookup_order -> check_policy -> request_refund`；不同任务保持独立。
+- 意图只咨询用 `consult`，明确申请用 `apply`；缺少字段留空并追问。
+- 调度器查询真实订单、检查确定性资格、提交审批；模型不能创建审批通过或执行节点。
+- 后续补充、修改、撤回用 `edit_refund_plan_task(task_id, expected_revision, ...)`，
+  版本来自对应任务的 `state.revision`。不要再调用下面的单任务更新/提交工具。
+- 等待一笔审批时可继续处理另一笔；已完成任务不能撤回。更改哪笔不明确时先问清楚。
+- 政策解释、运费等仍走知识库核查；核查服务故障应说明暂时无法核实，不得说知识库没有规定。
+
+其余单笔申请沿用下面的流程。
+
 调用 `get_refund_task` 读取当前会话的订单、原因、意图、缺失信息与 revision。
 将用户明确提供的信息通过 `update_refund_task(expected_revision=revision, ...)` 保存：
 

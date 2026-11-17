@@ -1,0 +1,93 @@
+{
+  "date": "2026-11-10",
+  "provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+  },
+  "local": {
+    "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+    "pytest": {
+      "passed": 283,
+      "skipped": 1,
+      "deselected": 2
+    },
+    "actions": {
+      "passed": 36,
+      "total": 36,
+      "dangerous": 0
+    },
+    "model_behaviour": {
+      "passed": 8,
+      "total": 8,
+      "repeats": 1
+    },
+    "evidence_live": {
+      "passed": 2,
+      "total": 2
+    },
+    "business_regression": {
+      "passed": 24,
+      "total": 24,
+      "scenarios": 8,
+      "repeats": 3
+    },
+    "http_acceptance": {
+      "passed": 32,
+      "failed": 0,
+      "blocked": 1,
+      "blocked_reason": "local process; Docker acceptance recorded separately"
+    }
+  },
+  "docker": {
+    "image": "after-sales-verification:priority-one-20261110",
+    "image_id": "sha256:4af3886795271d294662f5082831608aa83b7362565155f9d36c6bb8f7c2c2ae",
+    "source_matches_host": true,
+    "python": "3.12.15 (main, Oct  6 2026, 02:02:22) [GCC 14.2.0]",
+    "pytest": {
+      "passed": 283,
+      "skipped": 1,
+      "deselected": 2
+    },
+    "actions": {
+      "passed": 36,
+      "total": 36,
+      "dangerous": 0
+    },
+    "business_regression": {
+      "passed": 24,
+      "total": 24
+    },
+    "http_acceptance": {
+      "passed": 33,
+      "failed": 0,
+      "blocked": 0
+    }
+  },
+  "retrieval": {
+    "chunks": 152,
+    "dev_total": 67,
+    "holdout_total": 11,
+    "selected": [
+      0.6,
+      0.4
+    ],
+    "dev_vector_recall3": 0.9104477611940298,
+    "dev_hybrid_recall3": 0.9701492537313433,
+    "holdout_vector_recall3": 1.0,
+    "holdout_hybrid_recall3": 0.9090909090909091,
+    "holdout_regression": [
+      "P03"
+    ],
+    "dataset_sha256": "2579366f1064f2d7b5b8d0693fade795bfa4abcefed04b2d6b314429be8bbbb7"
+  },
+  "limitations": [
+    "Controlled synthetic datasets, one model-behaviour repetition; not a production reliability rate.",
+    "Designated holdout has been inspected before; not an unseen benchmark.",
+    "Real CrossEncoder weights unavailable; candidate limit tested with a controlled scorer.",
+    "Docker test covers a single application container and HTTP ASGI lifecycle; full Redis/Celery Compose topology and browser interaction not validated.",
+    "Container excludes .git; image ID and source manifest establish correspondence to the dirty host tree.",
+    "Initial schema-incompatible evidence run is diagnostic only and excluded from final claims."
+  ],
+  "artifacts": "verification-2026-11-10/"
+}

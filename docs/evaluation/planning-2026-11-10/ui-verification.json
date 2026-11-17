@@ -1,0 +1,8 @@
+{
+  "files_sha256": {
+    "index.html": "65f3f10ff4073b86958576a9618d84020393bebed263931bda1cf3b9d4f803af",
+    "knowledge.html": "53ec00a6018174750ba4e5a19e84337350a9afc288754348596526ab346ead9b"
+  },
+  "inline_javascript_syntax": "passed",
+  "browser_visual_validation": "not_run: browser connection unavailable"
+}

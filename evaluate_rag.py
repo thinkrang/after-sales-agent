@@ -28,7 +28,7 @@ TENANT = None 表示以"公共用户"视角评测（只看 public 文档）。
 import time
 
 from eval_dataset import retrieval_cases, stats
-from retrieval import STRATEGIES, reranker_ready
+from retrieval import retrieve, reranker_ready
 
 TOP_K = 10
 
@@ -59,8 +59,6 @@ def percentile(values: list[float], p: float) -> float:
 
 
 def run_strategy(name: str, cases: list[dict]) -> dict:
-    fn = STRATEGIES[name]
-
     latencies = []
     hits = 0
     hits3 = 0
@@ -70,9 +68,15 @@ def run_strategy(name: str, cases: list[dict]) -> dict:
 
     for case in cases:
         start = time.perf_counter()
-        results = fn(case["question"], TOP_K, tenant=TENANT)
+        production = retrieve(case["question"], PRODUCTION_TOP_K, strategy=name, tenant=TENANT)
         elapsed = time.perf_counter() - start
         latencies.append(elapsed)
+
+        # rerank 的候选量随 top_k 变化，不能用 top-10 的前三冒充线上 top-3。
+        results = retrieve(case["question"], TOP_K, strategy=name, tenant=TENANT)
+        production_rank = next(
+            (item["rank"] for item in production if item["source"] in case["expected_sources"]), None
+        )
 
         rank = None
         for item in results:
@@ -82,9 +86,9 @@ def run_strategy(name: str, cases: list[dict]) -> dict:
 
         if rank is not None and rank <= RECALL_AT:
             hits += 1
-        if rank is not None and rank <= PRODUCTION_TOP_K:
+        if production_rank is not None and production_rank <= PRODUCTION_TOP_K:
             hits3 += 1
-        if rank == 1:
+        if production_rank == 1:
             hit1 += 1
         if rank is not None:
             rr_sum += 1.0 / rank
@@ -94,16 +98,17 @@ def run_strategy(name: str, cases: list[dict]) -> dict:
             "type": case["type"],
             "question": case["question"],
             "rank": rank,
+            "production_rank": production_rank,
         })
 
     total = len(cases)
     return {
         "name": name,
         "total": total,
-        "recall3": hits3 / total,
-        "recall": hits / total,
-        "hit1": hit1 / total,
-        "mrr": rr_sum / total,
+        "recall3": hits3 / total if total else 0,
+        "recall": hits / total if total else 0,
+        "hit1": hit1 / total if total else 0,
+        "mrr": rr_sum / total if total else 0,
         "p50": percentile(latencies, 50) * 1000,
         "p95": percentile(latencies, 95) * 1000,
         "detail": detail,
@@ -131,7 +136,7 @@ def main():
             print(f"  {name:<14} 跳过：reranker 模型未就绪")
             continue
         t = time.perf_counter()
-        STRATEGIES[name]("预热", TOP_K, tenant=TENANT)
+        retrieve("预热", TOP_K, strategy=name, tenant=TENANT)
         print(f"  {name:<14} {time.perf_counter() - t:.2f}s")
     print()
 

@@ -1,0 +1,2072 @@
+{
+  "provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "ef1fb5b4c385375250a03f2dd5bdbea5412b0650bc04a6cb5951a60725199a65"
+  },
+  "python": "3.13.0",
+  "dataset": [
+    {
+      "id": "dual",
+      "messages": [
+        "请帮我同时申请两笔退款：A300尺码不合适，A400有质量问题。A400等主管时先处理A300。"
+      ]
+    },
+    {
+      "id": "edit",
+      "messages": [
+        "A300尺码不合适，A400质量问题，两笔都申请退款。",
+        "只把A400的退款原因改成包装破损，仍然申请退款。A300保持原样。"
+      ]
+    },
+    {
+      "id": "missing",
+      "messages": [
+        "两笔都要申请退款：A300尺码不合适，A400的原因我等会补充。",
+        "补充A400的退款原因：质量问题。请继续申请，A300不变。"
+      ]
+    },
+    {
+      "id": "consult",
+      "messages": [
+        "只咨询A300和A400能不能退，先别提交任何申请。"
+      ]
+    }
+  ],
+  "protocol": "business-postconditions-v1",
+  "mode": "real_model",
+  "limits": {
+    "model_calls_per_case": 16,
+    "plan_business_calls": 40
+  },
+  "limitations": [
+    "4 development scenarios; not a holdout or hiring success metric",
+    "Whole-system comparison includes multi-task state and scheduling, not just planner",
+    "Retrieval excluded for both variants; latency excludes human approval wait",
+    "Demo SQLite order/payment gateway; no real payment integration"
+  ],
+  "rows": [
+    {
+      "case": "dual",
+      "variant": "react",
+      "mode": "real_model",
+      "passed": false,
+      "error": "AssertionError: 不能同时保留两笔独立待审批申请",
+      "model": "deepseek-chat",
+      "elapsed_ms": 10315.9,
+      "model_calls": 4,
+      "agent_tool_calls": 5,
+      "business_calls": {
+        "order_reads": 4,
+        "ticket_preparations": 1,
+        "refund_gateway_calls": 0
+      },
+      "input_tokens": 5953,
+      "output_tokens": 464,
+      "usage_complete": true,
+      "plan_calls_used": null,
+      "trace": [
+        {
+          "user": "请帮我同时申请两笔退款：A300尺码不合适，A400有质量问题。A400等主管时先处理A300。",
+          "tickets": [
+            {
+              "id": "875f1321a0ec4cde",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            }
+          ]
+        }
+      ],
+      "action_trace": [
+        {
+          "name": "get_refund_task",
+          "args": {}
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A300"
+          }
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A400"
+          }
+        },
+        {
+          "name": "update_refund_task",
+          "args": {
+            "expected_revision": 0,
+            "order_id": "A300",
+            "reason": "尺码不合适",
+            "intent": "apply"
+          }
+        },
+        {
+          "name": "submit_refund_request",
+          "args": {
+            "order_id": "A300",
+            "reason": "尺码不合适",
+            "task_revision": 1
+          }
+        }
+      ],
+      "plan_events": [],
+      "tickets": [
+        {
+          "id": "875f1321a0ec4cde",
+          "thread_id": "eval_1cd2ada0b81248bcbcfb2026841d43e5",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A300",
+          "amount_cents": 5900,
+          "reason": "尺码不合适",
+          "payload_hash": "79e8ca6cfbcf4aeb83a910fa54371c5751eb3115feb4729b74260f37563768a6",
+          "status": "pending_approval",
+          "decision": null,
+          "decision_reason": null,
+          "operator": "acme-user",
+          "approved_by": null,
+          "approved_at": null,
+          "refund_id": null,
+          "execution_id": null,
+          "last_error": null,
+          "risk_tier": "low",
+          "risk_reasons": "[]",
+          "required_role": "customer",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:51:52",
+          "updated_at": "2026-11-10 20:51:52",
+          "approval_protocol": "detached",
+          "task_revision": 1
+        }
+      ],
+      "executions": [],
+      "repeat": 1
+    },
+    {
+      "case": "edit",
+      "variant": "react",
+      "mode": "real_model",
+      "passed": false,
+      "error": "AssertionError: 不能同时保留两笔独立待审批申请",
+      "model": "deepseek-chat",
+      "elapsed_ms": 9554.33,
+      "model_calls": 6,
+      "agent_tool_calls": 6,
+      "business_calls": {
+        "order_reads": 4,
+        "ticket_preparations": 1,
+        "refund_gateway_calls": 0
+      },
+      "input_tokens": 10243,
+      "output_tokens": 786,
+      "usage_complete": true,
+      "plan_calls_used": null,
+      "trace": [
+        {
+          "user": "A300尺码不合适，A400质量问题，两笔都申请退款。",
+          "tickets": [
+            {
+              "id": "2464594e5a58465a",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            }
+          ]
+        },
+        {
+          "user": "只把A400的退款原因改成包装破损，仍然申请退款。A300保持原样。",
+          "tickets": [
+            {
+              "id": "2464594e5a58465a",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            }
+          ]
+        }
+      ],
+      "action_trace": [
+        {
+          "name": "get_refund_task",
+          "args": {}
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A300"
+          }
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A400"
+          }
+        },
+        {
+          "name": "update_refund_task",
+          "args": {
+            "expected_revision": 0,
+            "order_id": "A300",
+            "reason": "尺码不合适",
+            "intent": "apply"
+          }
+        },
+        {
+          "name": "submit_refund_request",
+          "args": {
+            "order_id": "A300",
+            "reason": "尺码不合适",
+            "task_revision": 1
+          }
+        },
+        {
+          "name": "get_refund_task",
+          "args": {}
+        }
+      ],
+      "plan_events": [],
+      "tickets": [
+        {
+          "id": "2464594e5a58465a",
+          "thread_id": "eval_f3b9ee5fce4a4f5ca2b60a85f1544761",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A300",
+          "amount_cents": 5900,
+          "reason": "尺码不合适",
+          "payload_hash": "dfc95785b905d85bd2286b1d3d33eec4099e6e0a9aa802bd0f1836b1813915b3",
+          "status": "pending_approval",
+          "decision": null,
+          "decision_reason": null,
+          "operator": "acme-user",
+          "approved_by": null,
+          "approved_at": null,
+          "refund_id": null,
+          "execution_id": null,
+          "last_error": null,
+          "risk_tier": "low",
+          "risk_reasons": "[]",
+          "required_role": "customer",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:51:58",
+          "updated_at": "2026-11-10 20:51:58",
+          "approval_protocol": "detached",
+          "task_revision": 1
+        }
+      ],
+      "executions": [],
+      "repeat": 1
+    },
+    {
+      "case": "missing",
+      "variant": "react",
+      "mode": "real_model",
+      "passed": false,
+      "error": "AssertionError: 不能同时保留两笔独立待审批申请",
+      "model": "deepseek-chat",
+      "elapsed_ms": 8608.23,
+      "model_calls": 6,
+      "agent_tool_calls": 6,
+      "business_calls": {
+        "order_reads": 4,
+        "ticket_preparations": 1,
+        "refund_gateway_calls": 0
+      },
+      "input_tokens": 10398,
+      "output_tokens": 837,
+      "usage_complete": true,
+      "plan_calls_used": null,
+      "trace": [
+        {
+          "user": "两笔都要申请退款：A300尺码不合适，A400的原因我等会补充。",
+          "tickets": [
+            {
+              "id": "046e7eac89bd4a7c",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            }
+          ]
+        },
+        {
+          "user": "补充A400的退款原因：质量问题。请继续申请，A300不变。",
+          "tickets": [
+            {
+              "id": "046e7eac89bd4a7c",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            }
+          ]
+        }
+      ],
+      "action_trace": [
+        {
+          "name": "get_refund_task",
+          "args": {}
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A300"
+          }
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A400"
+          }
+        },
+        {
+          "name": "update_refund_task",
+          "args": {
+            "expected_revision": 0,
+            "order_id": "A300",
+            "reason": "尺码不合适",
+            "intent": "apply"
+          }
+        },
+        {
+          "name": "submit_refund_request",
+          "args": {
+            "order_id": "A300",
+            "reason": "尺码不合适",
+            "task_revision": 1
+          }
+        },
+        {
+          "name": "get_refund_task",
+          "args": {}
+        }
+      ],
+      "plan_events": [],
+      "tickets": [
+        {
+          "id": "046e7eac89bd4a7c",
+          "thread_id": "eval_13ccb5b04ec14d05afd9ab4f7de15e5e",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A300",
+          "amount_cents": 5900,
+          "reason": "尺码不合适",
+          "payload_hash": "895d4988e587b4c5c9113cf06e6a7ed95359b91e2c00728bf5868689a9029f8f",
+          "status": "pending_approval",
+          "decision": null,
+          "decision_reason": null,
+          "operator": "acme-user",
+          "approved_by": null,
+          "approved_at": null,
+          "refund_id": null,
+          "execution_id": null,
+          "last_error": null,
+          "risk_tier": "low",
+          "risk_reasons": "[]",
+          "required_role": "customer",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:52:07",
+          "updated_at": "2026-11-10 20:52:07",
+          "approval_protocol": "detached",
+          "task_revision": 1
+        }
+      ],
+      "executions": [],
+      "repeat": 1
+    },
+    {
+      "case": "consult",
+      "variant": "react",
+      "mode": "real_model",
+      "passed": true,
+      "error": null,
+      "model": "deepseek-chat",
+      "elapsed_ms": 2505.64,
+      "model_calls": 2,
+      "agent_tool_calls": 3,
+      "business_calls": {
+        "order_reads": 2,
+        "ticket_preparations": 0,
+        "refund_gateway_calls": 0
+      },
+      "input_tokens": 2375,
+      "output_tokens": 253,
+      "usage_complete": true,
+      "plan_calls_used": null,
+      "trace": [
+        {
+          "user": "只咨询A300和A400能不能退，先别提交任何申请。",
+          "tickets": []
+        }
+      ],
+      "action_trace": [
+        {
+          "name": "get_refund_task",
+          "args": {}
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A300"
+          }
+        },
+        {
+          "name": "get_order_info",
+          "args": {
+            "order_id": "A400"
+          }
+        }
+      ],
+      "plan_events": [],
+      "tickets": [],
+      "executions": [],
+      "repeat": 1
+    },
+    {
+      "case": "dual",
+      "variant": "plan",
+      "mode": "real_model",
+      "passed": true,
+      "error": null,
+      "model": "deepseek-chat",
+      "elapsed_ms": 4566.59,
+      "model_calls": 3,
+      "agent_tool_calls": 2,
+      "business_calls": {
+        "order_reads": 12,
+        "ticket_preparations": 2,
+        "refund_gateway_calls": 2
+      },
+      "input_tokens": 8125,
+      "output_tokens": 651,
+      "usage_complete": true,
+      "plan_calls_used": 8,
+      "trace": [
+        {
+          "user": "请帮我同时申请两笔退款：A300尺码不合适，A400有质量问题。A400等主管时先处理A300。",
+          "tickets": [
+            {
+              "id": "3047ef67d8f24461",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            },
+            {
+              "id": "5ff5594c83d94936",
+              "order_id": "A400",
+              "reason": "质量问题",
+              "status": "pending_approval"
+            }
+          ]
+        }
+      ],
+      "action_trace": [
+        {
+          "name": "get_refund_plan",
+          "args": {}
+        },
+        {
+          "name": "create_refund_plan",
+          "args": {
+            "draft": {
+              "goal": "为两笔订单同时提交退款申请：A300（尺码不合适）与 A400（质量问题）；A400 等待主管审批期间不阻塞 A300 的处理。",
+              "tasks": [
+                {
+                  "key": "order_a300",
+                  "order_id": "A300",
+                  "reason": "尺码不合适",
+                  "intent": "apply"
+                },
+                {
+                  "key": "order_a400",
+                  "order_id": "A400",
+                  "reason": "质量问题",
+                  "intent": "apply"
+                }
+              ],
+              "steps": [
+                {
+                  "key": "a300_lookup",
+                  "task": "order_a300",
+                  "action": "lookup_order"
+                },
+                {
+                  "key": "a300_policy",
+                  "task": "order_a300",
+                  "action": "check_policy",
+                  "depends_on": [
+                    "a300_lookup"
+                  ]
+                },
+                {
+                  "key": "a300_request",
+                  "task": "order_a300",
+                  "action": "request_refund",
+                  "depends_on": [
+                    "a300_policy"
+                  ]
+                },
+                {
+                  "key": "a400_lookup",
+                  "task": "order_a400",
+                  "action": "lookup_order"
+                },
+                {
+                  "key": "a400_policy",
+                  "task": "order_a400",
+                  "action": "check_policy",
+                  "depends_on": [
+                    "a400_lookup"
+                  ]
+                },
+                {
+                  "key": "a400_request",
+                  "task": "order_a400",
+                  "action": "request_refund",
+                  "depends_on": [
+                    "a400_policy"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "plan_events": [
+        {
+          "id": 1,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": null,
+          "step_id": null,
+          "plan_revision": 1,
+          "kind": "plan_created",
+          "detail": {
+            "step_count": 10
+          },
+          "created_at": 1794315137.5807269
+        },
+        {
+          "id": 2,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_lookup",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "2393e2ecbaa04c95a4bd546f15067b90",
+            "task_revision": 1
+          },
+          "created_at": 1794315137.5906336
+        },
+        {
+          "id": 3,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_lookup",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "f5247743e1c64139a44bb0ed26f854c0",
+            "task_revision": 1
+          },
+          "created_at": 1794315137.5907378
+        },
+        {
+          "id": 4,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_lookup",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a300_lookup"
+          },
+          "created_at": 1794315137.5997946
+        },
+        {
+          "id": 5,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_lookup",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 0.928,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "2393e2ecbaa04c95a4bd546f15067b90",
+            "approval_id": null,
+            "result_ref": "a300_lookup"
+          },
+          "created_at": 1794315137.599862
+        },
+        {
+          "id": 6,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_lookup",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a400_lookup"
+          },
+          "created_at": 1794315137.6160116
+        },
+        {
+          "id": 7,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_lookup",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 0.866,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "f5247743e1c64139a44bb0ed26f854c0",
+            "approval_id": null,
+            "result_ref": "a400_lookup"
+          },
+          "created_at": 1794315137.6160936
+        },
+        {
+          "id": 8,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_policy",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "938dacd3103a4c3e8955c1ae05c9202b",
+            "task_revision": 1
+          },
+          "created_at": 1794315137.6245823
+        },
+        {
+          "id": 9,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_policy",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "86cf4f9577d04b69b3c26fbcfb8312cc",
+            "task_revision": 1
+          },
+          "created_at": 1794315137.6246603
+        },
+        {
+          "id": 10,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_policy",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a400_policy"
+          },
+          "created_at": 1794315137.6353834
+        },
+        {
+          "id": 11,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_policy",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 0.954,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "86cf4f9577d04b69b3c26fbcfb8312cc",
+            "approval_id": null,
+            "result_ref": "a400_policy"
+          },
+          "created_at": 1794315137.6354508
+        },
+        {
+          "id": 12,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_policy",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a300_policy"
+          },
+          "created_at": 1794315137.645819
+        },
+        {
+          "id": 13,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_policy",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 1.027,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "938dacd3103a4c3e8955c1ae05c9202b",
+            "approval_id": null,
+            "result_ref": "a300_policy"
+          },
+          "created_at": 1794315137.6458943
+        },
+        {
+          "id": 14,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "55f2b2cb192446f1845e28ca7faed348",
+            "task_revision": 1
+          },
+          "created_at": 1794315137.654497
+        },
+        {
+          "id": 15,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "3047ef67d8f24461",
+            "result_ref": "a300_request"
+          },
+          "created_at": 1794315137.6737444
+        },
+        {
+          "id": 16,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 9.965,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "55f2b2cb192446f1845e28ca7faed348",
+            "approval_id": "3047ef67d8f24461",
+            "result_ref": "a300_request"
+          },
+          "created_at": 1794315137.6738276
+        },
+        {
+          "id": 17,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request$approval",
+          "plan_revision": 1,
+          "kind": "step_waiting_approval",
+          "detail": {
+            "tool": "await_approval",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "3047ef67d8f24461",
+            "result_ref": "a300_request$approval"
+          },
+          "created_at": 1794315137.6820345
+        },
+        {
+          "id": 18,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "0c958135c61d4313bbd0279f61fea5bb",
+            "task_revision": 1
+          },
+          "created_at": 1794315137.682188
+        },
+        {
+          "id": 19,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "5ff5594c83d94936",
+            "result_ref": "a400_request"
+          },
+          "created_at": 1794315137.7009227
+        },
+        {
+          "id": 20,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 11.33,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "0c958135c61d4313bbd0279f61fea5bb",
+            "approval_id": "5ff5594c83d94936",
+            "result_ref": "a400_request"
+          },
+          "created_at": 1794315137.700988
+        },
+        {
+          "id": 21,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request$approval",
+          "plan_revision": 1,
+          "kind": "step_waiting_approval",
+          "detail": {
+            "tool": "await_approval",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "5ff5594c83d94936",
+            "result_ref": "a400_request$approval"
+          },
+          "created_at": 1794315137.7088726
+        },
+        {
+          "id": 22,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request$approval",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "await_approval",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "3047ef67d8f24461",
+            "result_ref": "a300_request$approval"
+          },
+          "created_at": 1794315139.4561412
+        },
+        {
+          "id": 23,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request$execute",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "5be46d9cea344d88a373efa2dc1ae6d7",
+            "task_revision": 1
+          },
+          "created_at": 1794315139.4562652
+        },
+        {
+          "id": 24,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request$execute",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "3047ef67d8f24461",
+            "result_ref": "a300_request$execute"
+          },
+          "created_at": 1794315139.4781225
+        },
+        {
+          "id": 25,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "089c09dec2cc4806935cf5694cf3893b",
+          "step_id": "a300_request$execute",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 20.826,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "5be46d9cea344d88a373efa2dc1ae6d7",
+            "approval_id": "3047ef67d8f24461",
+            "result_ref": "a300_request$execute"
+          },
+          "created_at": 1794315139.4781926
+        },
+        {
+          "id": 26,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request$approval",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "await_approval",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "5ff5594c83d94936",
+            "result_ref": "a400_request$approval"
+          },
+          "created_at": 1794315139.5077944
+        },
+        {
+          "id": 27,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request$execute",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "fa2075d422974e33a27b1a0a0a156188",
+            "task_revision": 1
+          },
+          "created_at": 1794315139.5079105
+        },
+        {
+          "id": 28,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request$execute",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "5ff5594c83d94936",
+            "result_ref": "a400_request$execute"
+          },
+          "created_at": 1794315139.5336733
+        },
+        {
+          "id": 29,
+          "plan_id": "f84306b671ae464e90f1c41648c08fea",
+          "request_id": "ad9a292ddf1d4da0a96d7ae333bb66b7",
+          "task_id": "01695d2337e643b692027958add67cbb",
+          "step_id": "a400_request$execute",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 24.514,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "fa2075d422974e33a27b1a0a0a156188",
+            "approval_id": "5ff5594c83d94936",
+            "result_ref": "a400_request$execute"
+          },
+          "created_at": 1794315139.5337586
+        }
+      ],
+      "tickets": [
+        {
+          "id": "3047ef67d8f24461",
+          "thread_id": "task_089c09dec2cc4806935cf5694cf3893b",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A300",
+          "amount_cents": 5900,
+          "reason": "尺码不合适",
+          "payload_hash": "54050198191bda1dafadf0e37f5a24fe267e4991dc55aa1007cb1af88ccc7567",
+          "status": "executed",
+          "decision": "approve",
+          "decision_reason": null,
+          "operator": "acme-user",
+          "approved_by": "acme-user",
+          "approved_at": "2026-11-10 20:52:19",
+          "refund_id": "RF5BD880758C4A48BC",
+          "execution_id": "3047ef67d8f24461",
+          "last_error": null,
+          "risk_tier": "low",
+          "risk_reasons": "[]",
+          "required_role": "customer",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:52:17",
+          "updated_at": "2026-11-10 20:52:19",
+          "approval_protocol": "detached",
+          "task_revision": 1
+        },
+        {
+          "id": "5ff5594c83d94936",
+          "thread_id": "task_01695d2337e643b692027958add67cbb",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A400",
+          "amount_cents": 128000,
+          "reason": "质量问题",
+          "payload_hash": "2d32f77bf5f400f60c1f51467e1d2eda979019759df1fbaad36c63a1ad0403d9",
+          "status": "executed",
+          "decision": "approve",
+          "decision_reason": null,
+          "operator": "acme-manager",
+          "approved_by": "acme-manager",
+          "approved_at": "2026-11-10 20:52:19",
+          "refund_id": "RF5AC6EA853CF54993",
+          "execution_id": "5ff5594c83d94936",
+          "last_error": null,
+          "risk_tier": "high",
+          "risk_reasons": "[\"金额 1280.00 元达到或超过自动审批上限 500 元\"]",
+          "required_role": "approver",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:52:17",
+          "updated_at": "2026-11-10 20:52:19",
+          "approval_protocol": "detached",
+          "task_revision": 1
+        }
+      ],
+      "executions": [
+        {
+          "idempotency_key": "3047ef67d8f24461",
+          "order_id": "A300",
+          "tenant_id": "acme",
+          "user_id": "acme-user",
+          "amount_cents": 5900,
+          "refund_id": "RF5BD880758C4A48BC",
+          "created_at": "2026-11-10 20:52:19"
+        },
+        {
+          "idempotency_key": "5ff5594c83d94936",
+          "order_id": "A400",
+          "tenant_id": "acme",
+          "user_id": "acme-user",
+          "amount_cents": 128000,
+          "refund_id": "RF5AC6EA853CF54993",
+          "created_at": "2026-11-10 20:52:19"
+        }
+      ],
+      "repeat": 1
+    },
+    {
+      "case": "edit",
+      "variant": "plan",
+      "mode": "real_model",
+      "passed": true,
+      "error": null,
+      "model": "deepseek-chat",
+      "elapsed_ms": 6842.02,
+      "model_calls": 5,
+      "agent_tool_calls": 3,
+      "business_calls": {
+        "order_reads": 13,
+        "ticket_preparations": 3,
+        "refund_gateway_calls": 2
+      },
+      "input_tokens": 21626,
+      "output_tokens": 882,
+      "usage_complete": true,
+      "plan_calls_used": 9,
+      "trace": [
+        {
+          "user": "A300尺码不合适，A400质量问题，两笔都申请退款。",
+          "tickets": [
+            {
+              "id": "a2ee65b94c0e40bb",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            },
+            {
+              "id": "b72beab98d6d4c16",
+              "order_id": "A400",
+              "reason": "质量问题",
+              "status": "pending_approval"
+            }
+          ]
+        },
+        {
+          "user": "只把A400的退款原因改成包装破损，仍然申请退款。A300保持原样。",
+          "tickets": [
+            {
+              "id": "a2ee65b94c0e40bb",
+              "order_id": "A300",
+              "reason": "尺码不合适",
+              "status": "pending_approval"
+            },
+            {
+              "id": "b72beab98d6d4c16",
+              "order_id": "A400",
+              "reason": "质量问题",
+              "status": "rejected"
+            },
+            {
+              "id": "04ac7bf399e64e9f",
+              "order_id": "A400",
+              "reason": "包装破损",
+              "status": "pending_approval"
+            }
+          ]
+        }
+      ],
+      "action_trace": [
+        {
+          "name": "get_refund_plan",
+          "args": {}
+        },
+        {
+          "name": "create_refund_plan",
+          "args": {
+            "draft": {
+              "goal": "为 A300（尺码不合适）和 A400（质量问题）两笔订单分别申请退款",
+              "tasks": [
+                {
+                  "key": "A300",
+                  "order_id": "A300",
+                  "reason": "尺码不合适",
+                  "intent": "apply"
+                },
+                {
+                  "key": "A400",
+                  "order_id": "A400",
+                  "reason": "质量问题",
+                  "intent": "apply"
+                }
+              ],
+              "steps": [
+                {
+                  "key": "a300_lookup",
+                  "task": "A300",
+                  "action": "lookup_order"
+                },
+                {
+                  "key": "a300_policy",
+                  "task": "A300",
+                  "action": "check_policy",
+                  "depends_on": [
+                    "a300_lookup"
+                  ]
+                },
+                {
+                  "key": "a300_request",
+                  "task": "A300",
+                  "action": "request_refund",
+                  "depends_on": [
+                    "a300_policy"
+                  ]
+                },
+                {
+                  "key": "a400_lookup",
+                  "task": "A400",
+                  "action": "lookup_order"
+                },
+                {
+                  "key": "a400_policy",
+                  "task": "A400",
+                  "action": "check_policy",
+                  "depends_on": [
+                    "a400_lookup"
+                  ]
+                },
+                {
+                  "key": "a400_request",
+                  "task": "A400",
+                  "action": "request_refund",
+                  "depends_on": [
+                    "a400_policy"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "edit_refund_plan_task",
+          "args": {
+            "task_id": "1f0baca0e46d4b5296e36849795b9756",
+            "expected_revision": 1,
+            "reason": "包装破损",
+            "intent": "apply"
+          }
+        }
+      ],
+      "plan_events": [
+        {
+          "id": 1,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": null,
+          "step_id": null,
+          "plan_revision": 1,
+          "kind": "plan_created",
+          "detail": {
+            "step_count": 10
+          },
+          "created_at": 1794315141.7166872
+        },
+        {
+          "id": 2,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_lookup",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "25df9737c8b94f1abc826a3cad23c01e",
+            "task_revision": 1
+          },
+          "created_at": 1794315141.7266233
+        },
+        {
+          "id": 3,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_lookup",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "1ff4f67f228044bda52be9320e5f8669",
+            "task_revision": 1
+          },
+          "created_at": 1794315141.7266967
+        },
+        {
+          "id": 4,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_lookup",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a300_lookup"
+          },
+          "created_at": 1794315141.735014
+        },
+        {
+          "id": 5,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_lookup",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 0.82,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "25df9737c8b94f1abc826a3cad23c01e",
+            "approval_id": null,
+            "result_ref": "a300_lookup"
+          },
+          "created_at": 1794315141.735089
+        },
+        {
+          "id": 6,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_lookup",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a400_lookup"
+          },
+          "created_at": 1794315141.7376835
+        },
+        {
+          "id": 7,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_lookup",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "lookup_order",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 0.806,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "1ff4f67f228044bda52be9320e5f8669",
+            "approval_id": null,
+            "result_ref": "a400_lookup"
+          },
+          "created_at": 1794315141.7377536
+        },
+        {
+          "id": 8,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_policy",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "1c1c9b7c07094040895fe1cc3fbe41f4",
+            "task_revision": 1
+          },
+          "created_at": 1794315141.746903
+        },
+        {
+          "id": 9,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_policy",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "5fc36252cb884d0cb54cf322d0764f8d",
+            "task_revision": 1
+          },
+          "created_at": 1794315141.7470355
+        },
+        {
+          "id": 10,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_policy",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a400_policy"
+          },
+          "created_at": 1794315141.7560484
+        },
+        {
+          "id": 11,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_policy",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 0.901,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "5fc36252cb884d0cb54cf322d0764f8d",
+            "approval_id": null,
+            "result_ref": "a400_policy"
+          },
+          "created_at": 1794315141.756137
+        },
+        {
+          "id": 12,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_policy",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "error_code": null,
+            "approval_id": null,
+            "result_ref": "a300_policy"
+          },
+          "created_at": 1794315141.7688518
+        },
+        {
+          "id": 13,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_policy",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "check_policy",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 1.003,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "1c1c9b7c07094040895fe1cc3fbe41f4",
+            "approval_id": null,
+            "result_ref": "a300_policy"
+          },
+          "created_at": 1794315141.7689204
+        },
+        {
+          "id": 14,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "9972c48113bb43d6bd032a5d72a50c72",
+            "task_revision": 1
+          },
+          "created_at": 1794315141.7774618
+        },
+        {
+          "id": 15,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "a2ee65b94c0e40bb",
+            "result_ref": "a300_request"
+          },
+          "created_at": 1794315141.7959788
+        },
+        {
+          "id": 16,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 11.178,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "9972c48113bb43d6bd032a5d72a50c72",
+            "approval_id": "a2ee65b94c0e40bb",
+            "result_ref": "a300_request"
+          },
+          "created_at": 1794315141.796061
+        },
+        {
+          "id": 17,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request$approval",
+          "plan_revision": 1,
+          "kind": "step_waiting_approval",
+          "detail": {
+            "tool": "await_approval",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "a2ee65b94c0e40bb",
+            "result_ref": "a300_request$approval"
+          },
+          "created_at": 1794315141.8047204
+        },
+        {
+          "id": 18,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request",
+          "plan_revision": 1,
+          "kind": "step_started",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "9d5fd380e4e441e0a6b4e5e93927c877",
+            "task_revision": 1
+          },
+          "created_at": 1794315141.8049324
+        },
+        {
+          "id": 19,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request",
+          "plan_revision": 1,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "b72beab98d6d4c16",
+            "result_ref": "a400_request"
+          },
+          "created_at": 1794315141.8246636
+        },
+        {
+          "id": 20,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request",
+          "plan_revision": 1,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "request_refund",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 10.235,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "9d5fd380e4e441e0a6b4e5e93927c877",
+            "approval_id": "b72beab98d6d4c16",
+            "result_ref": "a400_request"
+          },
+          "created_at": 1794315141.824733
+        },
+        {
+          "id": 21,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "cc2c7be2ebd046d9948acd2b2d98e612",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request$approval",
+          "plan_revision": 1,
+          "kind": "step_waiting_approval",
+          "detail": {
+            "tool": "await_approval",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "b72beab98d6d4c16",
+            "result_ref": "a400_request$approval"
+          },
+          "created_at": 1794315141.8318152
+        },
+        {
+          "id": 22,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": null,
+          "plan_revision": 2,
+          "kind": "branch_replanned",
+          "detail": {
+            "invalidated": [
+              "a400_request",
+              "a400_request$approval",
+              "a400_request$execute"
+            ],
+            "task_revision": 2,
+            "cancelled": false
+          },
+          "created_at": 1794315144.685558
+        },
+        {
+          "id": 23,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request",
+          "plan_revision": 2,
+          "kind": "step_started",
+          "detail": {
+            "tool": "request_refund",
+            "version": 2,
+            "attempt": 1,
+            "run_id": "f6a9a60cc5554d1188d5be62913d879f",
+            "task_revision": 2
+          },
+          "created_at": 1794315144.6977813
+        },
+        {
+          "id": 24,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request",
+          "plan_revision": 2,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "request_refund",
+            "version": 2,
+            "error_code": null,
+            "approval_id": "04ac7bf399e64e9f",
+            "result_ref": "a400_request"
+          },
+          "created_at": 1794315144.7166405
+        },
+        {
+          "id": 25,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request",
+          "plan_revision": 2,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "request_refund",
+            "version": 2,
+            "attempt": 1,
+            "duration_ms": 10.953,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "f6a9a60cc5554d1188d5be62913d879f",
+            "approval_id": "04ac7bf399e64e9f",
+            "result_ref": "a400_request"
+          },
+          "created_at": 1794315144.716724
+        },
+        {
+          "id": 26,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request$approval",
+          "plan_revision": 2,
+          "kind": "step_waiting_approval",
+          "detail": {
+            "tool": "await_approval",
+            "version": 2,
+            "error_code": null,
+            "approval_id": "04ac7bf399e64e9f",
+            "result_ref": "a400_request$approval"
+          },
+          "created_at": 1794315144.724281
+        },
+        {
+          "id": 27,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request$approval",
+          "plan_revision": 2,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "await_approval",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "a2ee65b94c0e40bb",
+            "result_ref": "a300_request$approval"
+          },
+          "created_at": 1794315146.3270648
+        },
+        {
+          "id": 28,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request$execute",
+          "plan_revision": 2,
+          "kind": "step_started",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "attempt": 1,
+            "run_id": "ca1afb7a2d9c47c59769c1b8b64b4f21",
+            "task_revision": 1
+          },
+          "created_at": 1794315146.3271723
+        },
+        {
+          "id": 29,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request$execute",
+          "plan_revision": 2,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "error_code": null,
+            "approval_id": "a2ee65b94c0e40bb",
+            "result_ref": "a300_request$execute"
+          },
+          "created_at": 1794315146.3527112
+        },
+        {
+          "id": 30,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "8bc7b4cea5f04b10b7648ed841c691d3",
+          "step_id": "a300_request$execute",
+          "plan_revision": 2,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 1,
+            "attempt": 1,
+            "duration_ms": 24.226,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "ca1afb7a2d9c47c59769c1b8b64b4f21",
+            "approval_id": "a2ee65b94c0e40bb",
+            "result_ref": "a300_request$execute"
+          },
+          "created_at": 1794315146.3527741
+        },
+        {
+          "id": 31,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request$approval",
+          "plan_revision": 2,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "await_approval",
+            "version": 2,
+            "error_code": null,
+            "approval_id": "04ac7bf399e64e9f",
+            "result_ref": "a400_request$approval"
+          },
+          "created_at": 1794315146.38283
+        },
+        {
+          "id": 32,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request$execute",
+          "plan_revision": 2,
+          "kind": "step_started",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 2,
+            "attempt": 1,
+            "run_id": "b2e02c80d66d41bbbda0050dddc95c91",
+            "task_revision": 2
+          },
+          "created_at": 1794315146.3829968
+        },
+        {
+          "id": 33,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request$execute",
+          "plan_revision": 2,
+          "kind": "step_succeeded",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 2,
+            "error_code": null,
+            "approval_id": "04ac7bf399e64e9f",
+            "result_ref": "a400_request$execute"
+          },
+          "created_at": 1794315146.4083977
+        },
+        {
+          "id": 34,
+          "plan_id": "530cac1e328f43b19fafdc801052789b",
+          "request_id": "4a839a201dc64c00b061f0e153edc669",
+          "task_id": "1f0baca0e46d4b5296e36849795b9756",
+          "step_id": "a400_request$execute",
+          "plan_revision": 2,
+          "kind": "step_attempt_finished",
+          "detail": {
+            "tool": "execute_refund",
+            "version": 2,
+            "attempt": 1,
+            "duration_ms": 24.244,
+            "error_code": null,
+            "retryable": false,
+            "run_id": "b2e02c80d66d41bbbda0050dddc95c91",
+            "approval_id": "04ac7bf399e64e9f",
+            "result_ref": "a400_request$execute"
+          },
+          "created_at": 1794315146.4084575
+        }
+      ],
+      "tickets": [
+        {
+          "id": "a2ee65b94c0e40bb",
+          "thread_id": "task_8bc7b4cea5f04b10b7648ed841c691d3",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A300",
+          "amount_cents": 5900,
+          "reason": "尺码不合适",
+          "payload_hash": "fe080671fc6035cce135fd7917179aa5a7a8d4e30c9e332c0774b2f36fcae8b5",
+          "status": "executed",
+          "decision": "approve",
+          "decision_reason": null,
+          "operator": "acme-user",
+          "approved_by": "acme-user",
+          "approved_at": "2026-11-10 20:52:26",
+          "refund_id": "RF98F171D8AE7B49FD",
+          "execution_id": "a2ee65b94c0e40bb",
+          "last_error": null,
+          "risk_tier": "low",
+          "risk_reasons": "[]",
+          "required_role": "customer",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:52:21",
+          "updated_at": "2026-11-10 20:52:26",
+          "approval_protocol": "detached",
+          "task_revision": 1
+        },
+        {
+          "id": "b72beab98d6d4c16",
+          "thread_id": "task_1f0baca0e46d4b5296e36849795b9756",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A400",
+          "amount_cents": 128000,
+          "reason": "质量问题",
+          "payload_hash": "bdfd2adf3c464147f0128ce2f6a6ccb249e083591a0478614a07c9a0c74c23fa",
+          "status": "rejected",
+          "decision": "reject",
+          "decision_reason": "任务已修改，原审批失效",
+          "operator": "acme-user",
+          "approved_by": null,
+          "approved_at": null,
+          "refund_id": null,
+          "execution_id": null,
+          "last_error": null,
+          "risk_tier": "high",
+          "risk_reasons": "[\"金额 1280.00 元达到或超过自动审批上限 500 元\"]",
+          "required_role": "approver",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:52:21",
+          "updated_at": "2026-11-10T20:52:24",
+          "approval_protocol": "detached",
+          "task_revision": 1
+        },
+        {
+          "id": "04ac7bf399e64e9f",
+          "thread_id": "task_1f0baca0e46d4b5296e36849795b9756",
+          "tenant_id": "acme",
+          "requester_id": "acme-user",
+          "order_id": "A400",
+          "amount_cents": 128000,
+          "reason": "包装破损",
+          "payload_hash": "e59f89266c66995eb2c84ed2f90d936cf2927d7fe3cb367726876bdeae7bb0dc",
+          "status": "executed",
+          "decision": "approve",
+          "decision_reason": null,
+          "operator": "acme-manager",
+          "approved_by": "acme-manager",
+          "approved_at": "2026-11-10 20:52:26",
+          "refund_id": "RF0505B219B0EA4BC3",
+          "execution_id": "04ac7bf399e64e9f",
+          "last_error": null,
+          "risk_tier": "high",
+          "risk_reasons": "[\"金额 1280.00 元达到或超过自动审批上限 500 元\"]",
+          "required_role": "approver",
+          "rule_version": "2026-10-25.1",
+          "attempts": 0,
+          "created_at": "2026-11-10 20:52:24",
+          "updated_at": "2026-11-10 20:52:26",
+          "approval_protocol": "detached",
+          "task_revision": 2
+        }
+      ],
+      "executions": [
+        {
+          "idempotency_key": "a2ee65b94c0e40bb",
+          "order_id": "A300",
+          "tenant_id": "acme",
+          "user_id": "acme-user",
+          "amount_cents": 5900,
+          "refund_id": "RF98F171D8AE7B49FD",
+          "created_at": "2026-11-10 20:52:26"
+        },
+        {
+          "idempotency_key": "04ac7bf399e64e9f",
+          "order_id": "A400",
+          "tenant_id": "acme",
+          "user_id": "acme-user",
+          "amount_cents": 128000,
+          "refund_id": "RF0505B219B0EA4BC3",
+          "created_at": "2026-11-10 20:52:26"
+        }
+      ],
+      "repeat": 1
+    },
+    {
+      "case": "missing",
+      "variant": "plan",
+      "mode": "real_model",
+      "passed": false,
+      "error": "APIStatusError: Error code: 402 - {'error': {'message': 'Insufficient Balance (request_id: fee6d769-0d1e-4485-9355-c4b3872d10e7)', 'type': 'insufficient_balance_error', 'param': None, 'code': 'invalid_request_error'}}",
+      "model": "deepseek-chat",
+      "elapsed_ms": 419.0,
+      "model_calls": 1,
+      "agent_tool_calls": 0,
+      "business_calls": {
+        "order_reads": 0,
+        "ticket_preparations": 0,
+        "refund_gateway_calls": 0
+      },
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "usage_complete": false,
+      "plan_calls_used": null,
+      "trace": [],
+      "action_trace": [],
+      "plan_events": [],
+      "tickets": [],
+      "executions": [],
+      "repeat": 1
+    },
+    {
+      "case": "consult",
+      "variant": "plan",
+      "mode": "real_model",
+      "passed": false,
+      "error": "APIStatusError: Error code: 402 - {'error': {'message': 'Insufficient Balance (request_id: 9943d53e-a854-4168-b9cc-90c46a3d34ed)', 'type': 'insufficient_balance_error', 'param': None, 'code': 'invalid_request_error'}}",
+      "model": "deepseek-chat",
+      "elapsed_ms": 486.7,
+      "model_calls": 1,
+      "agent_tool_calls": 0,
+      "business_calls": {
+        "order_reads": 0,
+        "ticket_preparations": 0,
+        "refund_gateway_calls": 0
+      },
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "usage_complete": false,
+      "plan_calls_used": null,
+      "trace": [],
+      "action_trace": [],
+      "plan_events": [],
+      "tickets": [],
+      "executions": [],
+      "repeat": 1
+    }
+  ],
+  "summary": {
+    "react": {
+      "passed": 1,
+      "total": 4,
+      "median_elapsed_ms": 9081.279999999999
+    },
+    "plan": {
+      "passed": 2,
+      "total": 4,
+      "median_elapsed_ms": 2526.645
+    }
+  }
+}

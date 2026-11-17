@@ -47,6 +47,10 @@ action. It treats the model and retrieved documents as untrusted inputs.
 - In-process per-conversation guards protect dialogue checkpoint writes from
   simultaneous chat/result updates. They do not provide distributed locking
   across multiple API workers; database CAS and uniqueness still guard money.
+- Hybrid retrieval merges stable chunk IDs, never reverse-maps body text to
+  an ID. Duplicate text across tenants must not change source or visibility.
+  Both routes and the final merge enforce tenant visibility. BM25 snapshots
+  follow a shared index revision file so worker updates invalidate API caches.
 
 ## Explicit demo limitations
 

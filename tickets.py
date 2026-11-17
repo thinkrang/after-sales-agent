@@ -152,9 +152,19 @@ def init_tickets_table() -> None:
         init_schema(conn)
         from long_memory import init_schema as init_memory_schema
         init_memory_schema(conn)
+        from plan_store import init_schema as init_plan_schema
+        init_plan_schema(conn)
+        from voucher_disputes import init_schema as init_voucher_schema
+        init_voucher_schema(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ticket_thread ON refund_tickets(thread_id)"
         )
+        conn.execute("""CREATE TABLE IF NOT EXISTS closed_refund_conversations (
+            tenant_id TEXT NOT NULL, requester_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
+            PRIMARY KEY (tenant_id, requester_id, conversation_id)
+        )""")
+        conn.execute("""CREATE INDEX IF NOT EXISTS idx_closed_refund_conversation
+            ON closed_refund_conversations(conversation_id)""")
         conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_active_action
@@ -174,6 +184,52 @@ def init_tickets_table() -> None:
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     return {k: row[k] for k in row.keys()}
+
+
+def conversation_closed(conn, tenant_id, requester_id, conversation_id) -> bool:
+    return conn.execute("""SELECT 1 FROM closed_refund_conversations
+        WHERE tenant_id=? AND requester_id=? AND conversation_id=?""",
+        (tenant_id, requester_id, conversation_id)).fetchone() is not None
+
+
+def closed_conversation_ids() -> set[str]:
+    with db.session(DB_PATH) as conn:
+        return {row[0] for row in conn.execute(
+            "SELECT conversation_id FROM closed_refund_conversations")}
+
+
+def scoped_conversation_tickets(conn, tenant_id, requester_id, conversation_id, statuses):
+    marks = ",".join("?" for _ in statuses)
+    return conn.execute(f"""SELECT * FROM refund_tickets
+        WHERE tenant_id=? AND requester_id=? AND (thread_id=? OR thread_id IN (
+            SELECT b.scope_thread_id FROM agent_plan_tasks b JOIN agent_plans p ON p.id=b.plan_id
+            WHERE p.tenant_id=? AND p.requester_id=? AND p.conversation_id=?))
+        AND status IN ({marks}) ORDER BY updated_at, rowid""",
+        (tenant_id, requester_id, conversation_id, tenant_id, requester_id, conversation_id, *statuses)
+    ).fetchall()
+
+
+def close_conversation(tenant_id: str, requester_id: str, conversation_id: str, *,
+                       path=None, apply: bool = True) -> bool:
+    """Fence new tickets before removing chat data from the separate session DB."""
+    with db.session(path if path is not None else DB_PATH) as conn:
+        if apply:
+            conn.execute("BEGIN IMMEDIATE")
+        if scoped_conversation_tickets(conn, tenant_id, requester_id, conversation_id,
+                                       (PENDING, APPROVED, EXECUTING)):
+            return False
+        if apply:
+            conn.execute("INSERT OR IGNORE INTO closed_refund_conversations VALUES (?, ?, ?)",
+                         (tenant_id, requester_id, conversation_id))
+        return True
+
+
+def conversation_receipts(tenant_id: str, requester_id: str, conversation_id: str) -> list[dict]:
+    """One durable receipt per terminal detached ticket, independent of checkpoint writes."""
+    with db.session(DB_PATH) as conn:
+        return [dict(row) for row in scoped_conversation_tickets(
+            conn, tenant_id, requester_id, conversation_id, (EXECUTED, REJECTED, FAILED))
+            if row["approval_protocol"] == "detached"]
 
 
 def _transition(
@@ -252,7 +308,12 @@ def create_ticket(
 
     with _lock, db.session(DB_PATH) as conn:
         conn.execute("BEGIN IMMEDIATE")
-        from refund_tasks import guard_action, bind_ticket
+        from refund_tasks import TaskConflict, guard_action, bind_ticket
+        parent = conn.execute("""SELECT p.conversation_id FROM agent_plan_tasks b
+            JOIN agent_plans p ON p.id=b.plan_id WHERE b.scope_thread_id=?
+            AND p.tenant_id=? AND p.requester_id=?""", (thread_id, tenant_id, requester_id)).fetchone()
+        if conversation_closed(conn, tenant_id, requester_id, parent[0] if parent else thread_id):
+            raise TaskConflict("会话已关闭，不能提交新的退款申请")
         task = guard_action(
             conn, tenant_id=tenant_id, requester_id=requester_id,
             thread_id=thread_id, order_id=order_id, reason=reason,
@@ -594,6 +655,9 @@ def list_tickets(
     *,
     tenant_id: str | None = None,
     requester_id: str | None = None,
+    status: str | None = None,
+    required_role: str | None = None,
+    exclude_requester_id: str | None = None,
 ) -> list[dict]:
     clauses = []
     params: list[str | int] = []
@@ -603,6 +667,13 @@ def list_tickets(
     if requester_id is not None:
         clauses.append("requester_id = ?")
         params.append(requester_id)
+    for column, value in (("status", status), ("required_role", required_role)):
+        if value is not None:
+            clauses.append(f"{column} = ?")
+            params.append(value)
+    if exclude_requester_id is not None:
+        clauses.append("requester_id != ?")
+        params.append(exclude_requester_id)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     params.append(limit)
     with _lock, db.session(DB_PATH) as conn:
@@ -610,7 +681,7 @@ def list_tickets(
             f"""
             SELECT * FROM refund_tickets
             {where}
-            ORDER BY created_at DESC LIMIT ?
+            ORDER BY created_at DESC, rowid DESC LIMIT ?
             """,
             params,
         ).fetchall()

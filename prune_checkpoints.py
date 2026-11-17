@@ -30,6 +30,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import settings
+import tickets
 
 # 和 api._now() 保持同一格式，否则字符串比较会得出错误的新旧关系。
 SESSION_FMT = "%Y-%m-%d %H:%M:%S"
@@ -42,7 +43,7 @@ def cutoff(days: int) -> str:
 
 
 def expired_sessions(conn: sqlite3.Connection, before: str, tenant: str | None = None) -> list[dict]:
-    sql = "SELECT id, title, updated_at, tenant_id FROM sessions WHERE updated_at < ?"
+    sql = "SELECT id, title, updated_at, tenant_id, user_id FROM sessions WHERE updated_at < ?"
     params: list[str] = [before]
     if tenant:
         sql += " AND tenant_id = ?"
@@ -71,6 +72,7 @@ def prune(
     apply: bool = False,
     orphans: bool = False,
     vacuum: bool = False,
+    tickets_db: Path | None = None,
 ) -> dict:
     before = cutoff(days)
     if not Path(sessions_db).exists():
@@ -78,13 +80,23 @@ def prune(
     if not Path(memory_db).exists():
         raise FileNotFoundError(f"记忆库不存在：{memory_db}")
 
-    report: dict = {"cutoff": before, "applied": apply, "threads": [],
+    report: dict = {"cutoff": before, "applied": apply, "threads": [], "protected": [],
                     "orphans": [], "checkpoints": 0, "writes": 0, "sessions": 0}
 
     with closing(sqlite3.connect(sessions_db, timeout=10)) as sconn, \
          closing(sqlite3.connect(memory_db, timeout=10)) as mconn:
         sconn.row_factory = sqlite3.Row
-        expired = expired_sessions(sconn, before, tenant)
+        ticket_path = tickets_db if tickets_db is not None else Path(sessions_db).with_name("tickets.sqlite")
+        if tickets_db is not None and not ticket_path.is_file():
+            raise FileNotFoundError(f"工单库不存在：{ticket_path}")
+        expired = []
+        for row in expired_sessions(sconn, before, tenant):
+            if ticket_path.is_file() and not tickets.close_conversation(
+                row["tenant_id"], row["user_id"], row["id"], path=ticket_path, apply=apply
+            ):
+                report["protected"].append(row["id"])
+                continue
+            expired.append(row)
         known = {r[0] for r in sconn.execute("SELECT id FROM sessions")}
         extra = orphan_threads(mconn, known) if orphans else []
 
@@ -131,12 +143,13 @@ def main() -> int:
     parser.add_argument("--vacuum", action="store_true", help="清理后回收空间")
     parser.add_argument("--sessions", type=Path, default=settings.DATA_DIR / "sessions.sqlite")
     parser.add_argument("--memory", type=Path, default=settings.DATA_DIR / "chat_memory.sqlite")
+    parser.add_argument("--tickets", type=Path, help="自定义工单库；默认查找会话库旁的 tickets.sqlite")
     args = parser.parse_args()
 
     try:
         report = prune(args.sessions, args.memory, days=args.days, tenant=args.tenant,
-                       apply=args.apply, orphans=args.orphans, vacuum=args.vacuum)
-    except (ValueError, FileNotFoundError) as exc:
+                       apply=args.apply, orphans=args.orphans, vacuum=args.vacuum, tickets_db=args.tickets)
+    except (ValueError, FileNotFoundError, sqlite3.Error) as exc:
         parser.error(str(exc))
 
     mode = "已删除" if report["applied"] else "预览（加 --apply 才会删除）"
@@ -150,6 +163,8 @@ def main() -> int:
     print(f"\n线程 {len(report['threads'])} 个（另有无会话行 {len(report['orphans'])} 个），"
           f"checkpoint {report['checkpoints']} 条，writes {report['writes']} 条，"
           f"会话行 {report['sessions']} 条")
+    if report["protected"]:
+        print(f"保留 {len(report['protected'])} 个仍有退款待处理的会话")
     if not report["threads"] and not report["orphans"]:
         print("没有需要清理的会话。")
     return 0

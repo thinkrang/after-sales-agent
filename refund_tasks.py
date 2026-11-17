@@ -7,6 +7,7 @@ come from the authenticated server context.
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from datetime import datetime
 
 import db
@@ -54,9 +55,9 @@ def _read(conn, scope: tuple) -> dict | None:
     return dict(row) if row else None
 
 
-def get(user: User, thread_id: str) -> dict:
+def get(user: User, thread_id: str, *, _conn=None) -> dict:
     scope = _scope(user, thread_id)
-    with db.session(tickets.DB_PATH) as conn:
+    with (nullcontext(_conn) if _conn is not None else db.session(tickets.DB_PATH)) as conn:
         task = _read(conn, scope) or dict(
             zip(("tenant_id", "requester_id", "thread_id"), scope),
             revision=0, order_id="", reason="", intent="consult",
@@ -89,7 +90,7 @@ def get(user: User, thread_id: str) -> dict:
 def update(user: User, thread_id: str, *, expected_revision: int,
            order_id: str | None = None, reason: str | None = None,
            intent: str | None = None, cancel: bool = False,
-           source: str = "service", turn_id: str | None = None) -> dict:
+           source: str = "service", turn_id: str | None = None, _conn=None) -> dict:
     scope = _scope(user, thread_id)
     if expected_revision < 0 or intent not in (None, "consult", "apply"):
         raise TaskConflict("任务版本或意图无效")
@@ -103,8 +104,9 @@ def update(user: User, thread_id: str, *, expected_revision: int,
         reason = " ".join(reason.split())
         if len(reason) > 500:
             raise TaskConflict("退款原因过长")
-    with db.session(tickets.DB_PATH) as conn:
-        conn.execute("BEGIN IMMEDIATE")
+    with (nullcontext(_conn) if _conn is not None else db.session(tickets.DB_PATH)) as conn:
+        if _conn is None:
+            conn.execute("BEGIN IMMEDIATE")
         old = _read(conn, scope)
         revision = old["revision"] if old else 0
         if expected_revision != revision:
@@ -119,7 +121,7 @@ def update(user: User, thread_id: str, *, expected_revision: int,
         cancelled = int(cancel or (current["cancelled"] and intent != "apply"))
         values = (new_order, new_reason, new_intent, cancelled)
         if old and values == tuple(current[k] for k in ("order_id", "reason", "intent", "cancelled")):
-            return get(user, thread_id)
+            return get(user, thread_id, _conn=conn)
         # Approval and edit race on the SAME database write lock. If approval
         # wins, editing fails; if edit wins, the old approval becomes rejected.
         active = conn.execute("""
@@ -155,7 +157,8 @@ def update(user: User, thread_id: str, *, expected_revision: int,
             VALUES (?, ?, ?, ?, ?, ?)
         """, (*scope, revision + 1, json.dumps(dict(order_id=new_order, reason=new_reason,
                   intent=new_intent, cancelled=cancelled, source=source, turn_id=turn_id), ensure_ascii=False), now))
-    return get(user, thread_id)
+        result = get(user, thread_id, _conn=conn)
+    return result
 
 
 def history(user: User, thread_id: str, *, after: int = 0, limit: int = 50) -> list[dict]:

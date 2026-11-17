@@ -83,3 +83,18 @@ def test_default_thread_is_stable_and_url_safe(env):
     user = mcp_tools.user_from_headers({"authorization": f"Bearer {token_for('acme-manager')}"})
     assert mcp_tools.default_thread(user) == mcp_tools.default_thread(user)
     assert mcp_tools.default_thread(user) == "mcp-acme-manager"
+
+
+def test_two_mcp_requests_keep_independent_pending_approvals(env):
+    user = auth.authenticate("acme-manager", "demo1234")
+    first = payload(mcp_tools.prepare_refund(user, "A100", "质量问题"))
+    second = payload(mcp_tools.prepare_refund(user, "A200", "尺码不合适"))
+    assert first["task_id"] != second["task_id"]
+    assert tickets.get_ticket(first["approval_id"])["status"] == "pending_approval"
+    assert payload(mcp_tools.prepare_refund(user, "A100", "质量问题"))["approval_id"] == first["approval_id"]
+    assert len(payload(mcp_tools.get_refund_task(user))["tasks"]) == 2
+    changed = payload(mcp_tools.prepare_refund(user, "A100", "包装破损", first["task_id"]))
+    assert changed["code"] == "conflict"
+    changed = payload(mcp_tools.prepare_refund(user, "A100", "包装破损", first["task_id"], first["task_revision"]))
+    assert changed["ok"] and changed["approval_id"] != first["approval_id"]
+    assert tickets.get_ticket(second["approval_id"])["status"] == "pending_approval"

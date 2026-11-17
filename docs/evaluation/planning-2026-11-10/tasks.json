@@ -1,0 +1,233 @@
+{
+  "mode": "system",
+  "dataset_version": "refund-tasks-v1",
+  "dataset_sha256": null,
+  "total": 24,
+  "passed": 24,
+  "success_rate": 1.0,
+  "p50_ms": 81.85499999999999,
+  "p95_ms": 132.01,
+  "by_case": {
+    "consultation": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    },
+    "slot_fill": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    },
+    "change_order": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    },
+    "change_reason": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    },
+    "cancel_pending": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    },
+    "approved_cannot_edit": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    },
+    "retry_after_lost_response": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    },
+    "restart_read": {
+      "runs": 3,
+      "passed": 3,
+      "failure_stages": {}
+    }
+  },
+  "by_split": {},
+  "failure_stages": {},
+  "limitations": "合成开发场景，指定 holdout 非独立采集；重复运行不代表生产分布。system 模式验证业务约束，不代表模型能力。模型耗时不含服务启动预热。messages 对照去掉结构化任务工具及 Skill 提示，保留对话记忆和相同审批/执行服务，是组件组合对照，不能归因于某一条提示或某一个字段。",
+  "results": [
+    {
+      "case": "consultation",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 64.19
+    },
+    {
+      "case": "slot_fill",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 126.0
+    },
+    {
+      "case": "change_order",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 133.18
+    },
+    {
+      "case": "change_reason",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 79.11
+    },
+    {
+      "case": "cancel_pending",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 72.86
+    },
+    {
+      "case": "approved_cannot_edit",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 73.37
+    },
+    {
+      "case": "retry_after_lost_response",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 115.04
+    },
+    {
+      "case": "restart_read",
+      "attempt": 1,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 82.39
+    },
+    {
+      "case": "consultation",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 63.47
+    },
+    {
+      "case": "slot_fill",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 118.8
+    },
+    {
+      "case": "change_order",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 128.97
+    },
+    {
+      "case": "change_reason",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 80.85
+    },
+    {
+      "case": "cancel_pending",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 76.78
+    },
+    {
+      "case": "approved_cannot_edit",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 80.52
+    },
+    {
+      "case": "retry_after_lost_response",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 113.15
+    },
+    {
+      "case": "restart_read",
+      "attempt": 2,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 86.36
+    },
+    {
+      "case": "consultation",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 55.9
+    },
+    {
+      "case": "slot_fill",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 121.3
+    },
+    {
+      "case": "change_order",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 132.01
+    },
+    {
+      "case": "change_reason",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 81.32
+    },
+    {
+      "case": "cancel_pending",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 80.59
+    },
+    {
+      "case": "approved_cannot_edit",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 90.03
+    },
+    {
+      "case": "retry_after_lost_response",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 119.86
+    },
+    {
+      "case": "restart_read",
+      "attempt": 3,
+      "passed": true,
+      "error": null,
+      "elapsed_ms": 80.02
+    }
+  ],
+  "complete": true,
+  "variant": "structured",
+  "provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+  },
+  "model": null
+}

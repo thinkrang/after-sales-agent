@@ -5,6 +5,7 @@ from threading import Lock
 from pathlib import Path
 from functools import lru_cache
 from io import BytesIO
+from uuid import uuid4
 os.environ.setdefault("HF_HUB_OFFLINE","1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE","1")
 from langchain_core.documents import Document
@@ -17,10 +18,19 @@ from pypdf import PdfReader
 # 1. 项目路径
 BASE_DIR = Path(__file__).resolve().parent
 KNOWLEDGE_DIR = BASE_DIR / "knowledge"
-VECTOR_DB_DIR = BASE_DIR / "vector_db"
-UPLOAD_DIR = BASE_DIR / "uploads"
+VECTOR_DB_DIR = Path(os.getenv("AGENT_VECTOR_DB_DIR", str(BASE_DIR / "vector_db"))).resolve()
+UPLOAD_DIR = Path(os.getenv("AGENT_UPLOAD_DIR", str(BASE_DIR / "uploads"))).resolve()
 index_lock = Lock()
 MODEL_NAME = "BAAI/bge-small-zh-v1.5"
+MAX_RETRIEVAL_CANDIDATES = 100
+
+
+def index_revision() -> str:
+    """共享索引版本：Celery 写入后，API 进程也能发现 BM25 快照已过期。"""
+    try:
+        return (VECTOR_DB_DIR / ".corpus-revision").read_text(encoding="ascii")
+    except FileNotFoundError:
+        return "initial"
 
 
 def _invalidate_bm25() -> None:
@@ -36,6 +46,14 @@ def _invalidate_bm25() -> None:
     用延迟 import 而不是顶部 import：retrieval 依赖 rag，
     反过来在模块级 import 会形成循环。
     """
+    # 先发布磁盘版本，再清本进程缓存。原子替换避免读到半写入的版本。
+    VECTOR_DB_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = VECTOR_DB_DIR / f".corpus-{uuid4().hex}.tmp"
+    try:
+        temporary.write_text(uuid4().hex, encoding="ascii")
+        temporary.replace(VECTOR_DB_DIR / ".corpus-revision")
+    finally:
+        temporary.unlink(missing_ok=True)
     try:
         import retrieval
         retrieval.refresh_corpus()
@@ -591,8 +609,9 @@ def debug_retrieval(
     if not question:
         raise ValueError("测试问题不能为空")
 
-    if not 1 <= top_k <= 10:
-        raise ValueError("top_k 必须在 1 到 10 之间")
+    # HTTP 请求仍限制为 10；内部 rerank 需要最多 3 * top_k 个候选。
+    if not 1 <= top_k <= MAX_RETRIEVAL_CANDIDATES:
+        raise ValueError(f"top_k 必须在 1 到 {MAX_RETRIEVAL_CANDIDATES} 之间")
 
     # 复用原来的 Chroma 向量数据库
     store = get_vector_store()
@@ -613,6 +632,7 @@ def debug_retrieval(
 
         results.append({
             "rank": rank,
+            "id": doc.id,
             "source": doc.metadata.get("source", "未知文档"),
             "tenant": doc.metadata.get("tenant", DEFAULT_TENANT),
             "page": doc.metadata.get("page"),

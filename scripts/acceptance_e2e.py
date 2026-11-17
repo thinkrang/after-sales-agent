@@ -8,7 +8,7 @@
 设计取舍
 --------
 - 用 AGENT_DATA_DIR 指向一个空目录，模拟「Docker 从空数据启动」。
-  Docker 本身无法验证（daemon 未运行），单独标 BLOCKED。
+  Docker 启动须在容器内运行本脚本验证，本地进程单独标 BLOCKED。
 - 走 TestClient 而不是外部 uvicorn：同样是真实 FastAPI + 中间件 + lifespan，
   但不需要占端口、不需要清理进程，可以反复跑。
 - 会调用真实模型（退款意图识别 + 工具调用），因此有 token 成本和几秒延迟。
@@ -21,8 +21,9 @@
 from __future__ import annotations
 
 import json
+import argparse
 import os
-import shutil
+import tempfile
 import sys
 import time
 from pathlib import Path
@@ -31,10 +32,7 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))
 
 # 必须在 import api 之前设置：settings.DATA_DIR 在导入时求值
-DATA_DIR = BASE / "_acceptance_data"
-if DATA_DIR.exists():
-    shutil.rmtree(DATA_DIR)
-DATA_DIR.mkdir(parents=True)
+DATA_DIR = Path(tempfile.mkdtemp(prefix="after-sales-acceptance-"))
 os.environ["AGENT_DATA_DIR"] = str(DATA_DIR)
 os.environ.setdefault("AUTH_SEED_DEMO_USERS", "1")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -79,6 +77,9 @@ def login(client: TestClient, username: str) -> dict:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
     print("=" * 72)
     print("端到端验收")
     print("=" * 72)
@@ -93,8 +94,10 @@ def main() -> int:
         r = client.get("/ready")
         ready_ok = r.status_code == 200 and r.json().get("ready", True)
         record("S1b /ready", ready_ok, f"HTTP {r.status_code} {str(r.json())[:80]}")
-        record("S1c Docker 空容器启动", None,
-               "本机 docker daemon 未运行，无法验证；已用空数据目录替代其数据面")
+        in_container = Path("/.dockerenv").exists()
+        record("S1c Docker 空容器启动", True if in_container else None,
+               "验收进程在容器内运行，SQLite 使用新建空目录"
+               if in_container else "本步骤在本地进程运行；容器内验收需单独运行")
 
         # ---------------- S2 登录与建会话 ----------------
         print("\nS2 登录与创建会话")
@@ -309,10 +312,14 @@ def main() -> int:
                              json={"thread_id": low_sid, "message": "先不退了，你们几点上班？"})
             ev3 = parse_sse(r3.text)
             kinds = {k for k, _ in ev3}
-            ok = "error" not in kinds and "interrupt" in kinds
+            # 新对话图不会停在审批上；自然语言撤回必须使原工单失效。
+            task = client.get(f"/sessions/{low_sid}/refund-task", headers=cust_s13).json()
+            live = client.get("/tickets?pending_only=true", headers=cust_s13).json()["tickets"]
+            ok = ("error" not in kinds and "done" in kinds and task.get("status") == "cancelled"
+                  and not any(t["thread_id"] == low_sid for t in live))
             hint = "".join(d.get("text", "") for k, d in ev3 if k == "token")
-            record("S13a 待审批时不报错", has_interrupt and ok,
-                   f"事件={sorted(kinds)} 提示={hint[:40]}")
+            record("S13a 待审批可自然语言撤回并继续咨询", has_interrupt and ok,
+                   f"事件={sorted(kinds)} task={task.get('status')} 提示={hint[:40]}")
         finally:
             if low_sid:
                 try:
@@ -382,6 +389,14 @@ def main() -> int:
             if s == "BLOCKED":
                 print(f"  - {step}: {note}")
     print("=" * 72)
+    if args.output:
+        from task_eval import provenance
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps({
+            "provenance": provenance(), "passed": passed, "failed": failed,
+            "blocked": blocked, "data_dir": str(DATA_DIR),
+            "results": [dict(step=s, status=status, detail=note) for s, status, note in results],
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
     return 1 if failed else 0
 
 

@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>团购券争议 · 售后工作台</title>
+  <style>
+    :root { color-scheme: light dark; --accent: #276e62; --line: color-mix(in srgb, CanvasText 16%, Canvas); }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: Canvas; color: CanvasText; font: 15px/1.6 system-ui, sans-serif; }
+    main { margin: auto; max-width: 900px; padding: 24px clamp(16px, 5vw, 38px) 56px; }
+    header, .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 30px; margin: 18px 0 8px; }
+    h2 { font-size: 19px; margin: 0 0 10px; }
+    h3 { font-size: 16px; margin: 8px 0; }
+    p { margin: 8px 0; overflow-wrap: anywhere; }
+    section { border: 1px solid var(--line); border-radius: 12px; margin-top: 16px; padding: 18px; }
+    label { display: block; font-weight: 600; margin: 8px 0 4px; }
+    button, select, textarea { font: inherit; border: 1px solid var(--line); border-radius: 7px; padding: 7px 12px; }
+    select, textarea { width: 100%; }
+    textarea { resize: vertical; min-height: 75px; }
+    button { cursor: pointer; margin: 6px 6px 0 0; }
+    button:disabled { cursor: wait; opacity: .65; }
+    .primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .entries { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    article { border-bottom: 1px solid var(--line); padding: 8px 0; overflow-wrap: anywhere; }
+    #notice { min-height: 24px; margin: 6px 0; }
+    ul { padding-left: 20px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <header><a href="/">← 售后工作台</a><span id="account"></span></header>
+  <h1>团购券核销争议</h1>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <section id="apply" hidden>
+    <h2>到店用不了券</h2>
+    <form id="submit">
+      <label for="voucher">我的团购券</label>
+      <select id="voucher" required></select>
+      <label for="store">到店门店</label>
+      <select id="store"></select>
+      <label for="arrival">到店时间（北京时间，选填）</label>
+      <input id="arrival" type="datetime-local">
+      <button id="check" type="button">检查能否使用</button>
+      <div id="preview"></div>
+      <label for="claim">争议说明</label>
+      <textarea id="claim" required maxlength="500" placeholder="例如：我没有到店消费，订单却显示已核销。"></textarea>
+      <button class="primary" type="submit">确认提交争议</button>
+    </form>
+  </section>
+  <section id="lists" hidden>
+    <div class="row"><h2>争议单</h2><button id="refresh" type="button">刷新</button></div>
+    <div class="entries">
+      <div><h3>我的争议</h3><div id="mine"></div></div>
+      <div id="queue" hidden><h3>待复核</h3><div id="queued"></div></div>
+    </div>
+  </section>
+  <section id="case" hidden>
+    <div class="row"><h2 id="caseTitle">争议详情</h2><button id="close" type="button">关闭详情</button></div>
+    <div id="caseBody"></div>
+    <form id="review" hidden>
+      <h3>人工复核</h3>
+      <button id="recheck" type="button">重新核查证据</button>
+      <label for="outcome">复核结论</label>
+      <select id="outcome" required>
+        <option value="">请选择结论</option>
+        <option value="eligible_to_apply">支持申请退款</option>
+        <option value="redemption_confirmed">确认已核销</option>
+        <option value="insufficient_evidence">暂无法确认</option>
+      </select>
+      <label for="note">复核依据（发起人可见）</label>
+      <textarea id="note" required maxlength="500"></textarea>
+      <button class="primary" type="submit">提交复核结论</button>
+    </form>
+  </section>
+</main>
+<script>
+  const el = id => document.getElementById(id);
+  const localTime = value => new Date(value).toLocaleString("zh-CN", {timeZone: "Asia/Shanghai"});
+  const statuses = {pending_review: "待人工复核", pending_recheck: "新证据已到，待重新复核", resolved: "已出结论"};
+  const conclusions = {eligible_to_apply: "可申请退款", redemption_confirmed: "确认已核销", insufficient_evidence: "暂无法确认"};
+  const reasons = {
+    unused_and_valid: "双方记录均显示未核销，券仍在有效期内。",
+    matching_redemption: "双方核销记录吻合。如有异议，可提交人工复核。",
+    missing_source: "平台或商家的核销记录缺失，需要人工复核。",
+    status_mismatch: "平台与商家的核销状态不一致，需要人工复核。",
+    redemption_reference_mismatch: "双方核销流水号不一致，需要人工复核。",
+    redemption_time_mismatch: "双方核销时间不一致或超出有效范围，需要人工复核。",
+    expired_voucher: "券已过期，需要人工确认适用规则。",
+    unknown_policy: "暂未找到适用规则，需要人工复核。",
+    inconsistent_record: "核销状态与流水不一致，需要人工复核。",
+    invalid_timestamp: "记录时间无法核验，需要人工复核。",
+    unexpected_status: "当前状态需要人工复核。",
+  };
+  const visitSteps = {
+    choose_store: "选一下门店，我可以核对这张券在该门店能否使用。",
+    verify_store_terms: "暂时查不到门店的使用条件，请向门店核实。",
+    change_store: "这家门店不在可用范围内，可以看看券支持的门店。",
+    change_time: "当前时间不在可用时段内，可以改到下方列出的时段。",
+    confirm_booking: "该门店需要预约，当前时间查不到已确认的预约。请先确认预约。",
+    eligible_at_store: "按券的记录和使用条件，目前符合到店使用条件。若门店仍无法接待，可以提交争议。",
+    check_expired_voucher: "该时点已超过券的有效期，可以提交争议核实后续处理。",
+    submit_dispute: "目前无法确认券是否还能用，可以带着已核对的记录提交争议。",
+    review_redemption: "两边都记录为已核销。如果你没有使用过这张券，可以提交争议。",
+  };
+  const eventNames = {case_submitted: "提交争议", evidence_refreshed: "更新证据", review_resolved: "人工复核完成",
+    merchant_evidence_rechecked: "收到商家新证据，已重新核查"};
+  let user, current, checkedVisit, sequence = 0, visitSequence = 0;
+
+  async function api(path, body) {
+    const token = localStorage.getItem("after_sales_access_token");
+    if (!token) throw new Error("请先返回售后工作台登录。");
+    const headers = { Authorization: "Bearer " + token };
+    if (body) headers["Content-Type"] = "application/json";
+    const res = await fetch(path, {method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined});
+    const data = await res.json();
+    if (res.status === 401) throw new Error("登录已过期，请返回售后工作台重新登录。");
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "提交失败，请检查输入。");
+    return data;
+  }
+
+  function append(parent, tag, text) {
+    const item = document.createElement(tag);
+    item.textContent = text;
+    parent.append(item);
+    return item;
+  }
+
+  function renderEvidence(parent, assessment) {
+    append(parent, "p", reasons[assessment.reason_code] || "请查看复核结论。");
+    append(parent, "p", "适用规则 " + assessment.voucher.policy_version);
+    const list = document.createElement("ul");
+    for (const source of ["platform", "merchant"]) {
+      const record = assessment.evidence.find(e => e.source === source);
+      const name = source === "platform" ? "平台" : "商家";
+      const status = record && {unused: "未核销", redeemed: "已核销"}[record.status];
+      const details = record ? [status || "状态待核实", record.record_id, record.redeem_ref,
+        record.redeemed_at && localTime(record.redeemed_at)].filter(Boolean).join(" · ") : "暂无记录";
+      append(list, "li", name + " · " + details);
+    }
+    parent.append(list);
+  }
+
+  function renderVisit(parent, visit) {
+    append(parent, "p", visitSteps[visit.next_step]);
+    const store = visit.stores.find(s => s.code === visit.store_code);
+    if (visit.store_code) {
+      append(parent, "p", (store?.name || "其他门店") + " · " + localTime(visit.visit_at));
+    }
+    if (visit.booking) append(parent, "p", "已找到该时段的确认预约 · " + visit.booking.booking_id);
+    if (visit.stores.length) {
+      append(parent, "p", "券的适用门店和时段（北京时间）");
+      for (const item of visit.stores) {
+        append(parent, "p", item.name + " · " + item.window + (item.booking_required ? " · 需预约" : ""));
+      }
+    }
+  }
+
+  function renderList(parent, items) {
+    parent.replaceChildren();
+    if (!items.length) append(parent, "p", "暂无争议单");
+    for (const item of items) {
+      const row = append(parent, "article", "");
+      append(row, "p", item.voucher_id + " · " + item.assessment.voucher.title + " · " + statuses[item.status]);
+      const open = append(row, "button", "查看详情");
+      open.onclick = () => run(open, () => openCase(item.id));
+    }
+  }
+
+  async function loadLists() {
+    const [mine, queue] = await Promise.all([api("/voucher-disputes"),
+      user.roles.includes("approver") ? api("/voucher-disputes?queue=true") : Promise.resolve(null)]);
+    renderList(el("mine"), mine.cases);
+    if (queue) renderList(el("queued"), queue.cases);
+    el("queue").hidden = !queue;
+    el("lists").hidden = false;
+  }
+
+  async function openCase(id, {reset = true} = {}) {
+    const request = ++sequence;
+    const item = await api("/voucher-disputes/" + encodeURIComponent(id));
+    if (request !== sequence) return;
+    current = item;
+    el("caseTitle").textContent = item.voucher_id + " · " + item.assessment.voucher.title;
+    const body = el("caseBody");
+    body.replaceChildren();
+    append(body, "p", statuses[item.status] + (item.status === "resolved" ? " · " + conclusions[item.outcome] : ""));
+    append(body, "p", item.claim);
+    const submittedVisit = item.events[0]?.detail.visit;
+    if (submittedVisit) {
+      const submittedStore = submittedVisit.stores.find(s => s.code === submittedVisit.store_code);
+      append(body, "p", "提交时的到店信息 · " + (submittedStore?.name || "其他门店") +
+        " · " + localTime(submittedVisit.visit_at));
+      if (submittedVisit.booking) append(body, "p", "到店预约 · " + submittedVisit.booking.booking_id);
+    }
+    renderEvidence(body, item.assessment);
+    if (item.status === "resolved" && item.outcome === "eligible_to_apply") append(body, "p", "可联系售后提交退款申请。");
+    if (item.status === "pending_recheck") {
+      const previous = [...item.events].reverse().find(event => event.detail.previous_resolution)?.detail.previous_resolution;
+      if (previous?.outcome) append(body, "p", "上次结论 · " + conclusions[previous.outcome]);
+      if (previous?.resolution_note) append(body, "p", "上次复核依据 · " + previous.resolution_note);
+    }
+    if (item.resolution_note) append(body, "p", "复核依据 · " + item.resolution_note);
+    append(body, "h3", "处理记录");
+    const list = document.createElement("ul");
+    for (const event of item.events) {
+      append(list, "li", localTime(event.created_at) + " · " + eventNames[event.kind]);
+    }
+    body.append(list);
+    if (reset) el("review").reset();
+    el("review").hidden = item.status === "resolved" || item.owner_id === user.username || !user.roles.includes("approver");
+    el("case").hidden = false;
+  }
+
+  async function run(button, action) {
+    if (button?.disabled) return;
+    if (button) button.disabled = true;
+    el("notice").textContent = "";
+    try { await action(); }
+    catch (err) { el("notice").textContent = err.message; }
+    finally { if (button) button.disabled = false; }
+  }
+
+  function clearVisit() {
+    visitSequence++;
+    checkedVisit = null;
+    el("preview").replaceChildren();
+  }
+
+  function visitPath(voucher) {
+    return "/vouchers/" + encodeURIComponent(voucher) + "/visit-check";
+  }
+
+  async function loadStores(preselect = "") {
+    clearVisit();
+    const ticket = ++visitSequence;
+    el("store").replaceChildren();
+    const unknown = append(el("store"), "option", "暂未选择门店");
+    unknown.value = "";
+    const data = await api(visitPath(el("voucher").value));
+    if (ticket !== visitSequence) return;
+    for (const item of [...data.visit.stores, {code: "OTHER", name: "其他门店"}]) {
+      append(el("store"), "option", item.name).value = item.code;
+    }
+    if ([...el("store").options].some(option => option.value === preselect)) el("store").value = preselect;
+  }
+
+  async function checkVisit() {
+    const ticket = ++visitSequence;
+    const params = new URLSearchParams();
+    if (el("store").value) params.set("store_code", el("store").value);
+    if (el("arrival").value) params.set("visit_at", el("arrival").value + "+08:00");
+    const data = await api(visitPath(el("voucher").value) + "?" + params);
+    if (ticket !== visitSequence) return false;
+    checkedVisit = data.visit;
+    el("preview").replaceChildren();
+    renderVisit(el("preview"), data.visit);
+    renderEvidence(el("preview"), data);
+    return true;
+  }
+
+  el("voucher").onchange = () => run(null, () => loadStores());
+  el("store").onchange = clearVisit;
+  el("arrival").oninput = clearVisit;
+  el("check").onclick = () => run(el("check"), checkVisit);
+  el("submit").onsubmit = event => {
+    event.preventDefault();
+    run(event.submitter, async () => {
+      if (el("arrival").value && !el("store").value) throw new Error("请选到店门店，或选「其他门店」。");
+      if (el("store").value && !checkedVisit) {
+        if (await checkVisit()) el("notice").textContent = "请核对到店信息和记录，再确认提交。";
+        return;
+      }
+      const body = {voucher_id: el("voucher").value, claim: el("claim").value};
+      if (checkedVisit?.store_code) {
+        body.store_code = checkedVisit.store_code;
+        body.visit_at = checkedVisit.visit_at;
+      }
+      const item = await api("/voucher-disputes", body);
+      el("claim").value = "";
+      await openCase(item.id);
+      await loadLists();
+    });
+  };
+  el("review").onsubmit = event => {
+    event.preventDefault();
+    run(event.submitter, async () => {
+      const {id, revision} = current;
+      await api("/voucher-disputes/" + id + "/decision",
+        {expected_revision: revision, outcome: el("outcome").value, note: el("note").value});
+      if (current?.id === id) await openCase(id);
+      await loadLists();
+    });
+  };
+  el("recheck").onclick = () => run(el("recheck"), async () => {
+    const {id, revision} = current;
+    await api("/voucher-disputes/" + id + "/recheck", {expected_revision: revision});
+    if (current?.id === id) await openCase(id, {reset: false});
+    el("notice").textContent = "已重新核查证据。";
+  });
+  el("refresh").onclick = () => run(el("refresh"), async () => {
+    await loadLists();
+    if (current) await openCase(current.id, {reset: false});
+  });
+  el("close").onclick = () => { sequence++; current = null; el("case").hidden = true; };
+
+  run(null, async () => {
+    user = await api("/auth/me");
+    el("account").textContent = user.display_name + " · " + user.tenant_id;
+    const {vouchers} = await api("/vouchers");
+    for (const item of vouchers) {
+      const option = append(el("voucher"), "option", item.voucher_id + " · " + item.title);
+      option.value = item.voucher_id;
+    }
+    el("apply").hidden = vouchers.length === 0;
+    if (vouchers.length) {
+      const params = new URLSearchParams(location.search);
+      const selected = vouchers.some(item => item.voucher_id === params.get("voucher"));
+      if (selected) el("voucher").value = params.get("voucher");
+      if (selected && params.has("arrival")) {
+        const date = new Date(params.get("arrival"));
+        if (Number.isFinite(date.getTime())) {
+          const local = new Date(date.getTime() + 8 * 60 * 60000);
+          el("arrival").value = local.toISOString().slice(0, 16);
+        }
+      }
+      await loadStores(selected ? params.get("store") || "" : "");
+      if (selected) await checkVisit();
+    }
+    await loadLists();
+  });
+</script>
+</body>
+</html>

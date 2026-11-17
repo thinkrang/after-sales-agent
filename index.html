@@ -494,6 +494,7 @@ html[data-theme="dark"] .welcome-mark{
       <button class="foot-link queue-btn" id="approvalBtn">
         <span>🔐</span> 审批队列 <span class="queue-badge" id="approvalCount" hidden>0</span>
       </button>
+      <a class="foot-link" href="/voucher-center"><span>🎟️</span> 团购券争议</a>
       <a class="foot-link" href="/knowledge"><span>📚</span> 知识库管理</a>
       <button class="foot-link" id="themeToggle"><span id="themeIcon">🌙</span> <span id="themeText">深色模式</span></button>
     </div>
@@ -519,6 +520,12 @@ html[data-theme="dark"] .welcome-mark{
       <span class="pill">DeepSeek</span>
     </header>
 
+    <details id="refundPlan" hidden style="padding:10px 24px;border-bottom:1px solid var(--border);font-size:13px;max-height:240px;overflow:auto">
+      <summary id="refundPlanSummary">多笔退款进度</summary>
+      <div id="refundPlanTasks"></div>
+      <button id="refundPlanHistoryBtn" type="button">查看处理记录</button>
+      <div id="refundPlanHistory"></div>
+    </details>
     <details id="refundTask" hidden style="padding:10px 24px;border-bottom:1px solid var(--border);font-size:13px">
       <summary id="refundTaskSummary"></summary>
       <p id="refundTaskDetail"></p>
@@ -616,7 +623,86 @@ html[data-theme="dark"] .welcome-mark{
     currentId: null,
     loading: false,
     stick: true,
+    plan: null,
   };
+
+  const taskStatus = { consulting:"咨询中", collecting:"待补充信息", ready:"正在核实",
+    pending_approval:"待确认或审批", approved:"已批准", executing:"正在退款",
+    executed:"已退款", rejected:"申请已拒绝或撤回", cancelled:"已撤回", failed:"需人工核实" };
+
+  function renderPlan(plan) {
+    state.plan = plan || null;
+    const panel = document.getElementById("refundPlan");
+    panel.hidden = !plan;
+    if (!plan) return;
+    document.getElementById("refundTask").hidden = true;
+    document.getElementById("refundPlanSummary").textContent = "多笔退款进度 · " +
+      plan.tasks.filter(t => t.state.status === "executed").length + "/" + plan.tasks.length + " 笔已完成";
+    const list = document.getElementById("refundPlanTasks");
+    list.replaceChildren();
+    for (const task of plan.tasks) {
+      const row = document.createElement("p");
+      const failed = plan.steps.some(s => s.task_id === task.id && s.status === "failed");
+      row.textContent = (task.state.order_id || "待补订单号") + " · " +
+        (failed ? "处理未完成，请核实信息或转人工" : taskStatus[task.state.status] || "处理中") +
+        (task.state.required_role === "approver" && task.state.status === "pending_approval" ? "（等待主管）" : "") +
+        " · " + (task.state.reason || "请补充退款原因") +
+        (task.state.refund_id ? " · 退款单号：" + task.state.refund_id : "");
+      list.appendChild(row);
+      document.querySelectorAll("[data-approval-id]").forEach(card => {
+        if (card.dataset.approvalId !== task.state.ticket_id || task.state.status === "pending_approval") return;
+        card.querySelectorAll("button").forEach(b => b.disabled = true);
+        const head = card.querySelector(".approval-head");
+        if (head) head.textContent = taskStatus[task.state.status] || "已处理";
+      });
+    }
+  }
+
+  document.getElementById("refundPlanHistoryBtn").onclick = async () => {
+    const sid = state.currentId;
+    if (!sid) return;
+    try {
+      let cursor = 0, events = [];
+      for (let page = 0; page < 10; page++) {
+        const data = await api("/sessions/" + encodeURIComponent(sid) + "/plan/events?after=" + cursor);
+        events.push(...data.events);
+        if (data.events.length < 100) break;
+        cursor = data.next_cursor;
+      }
+      if (state.currentId !== sid) return;
+      const list = document.getElementById("refundPlanHistory");
+      list.replaceChildren();
+      const names = { lookup_order:"核实订单", check_policy:"核实退款资格", request_refund:"提交申请",
+        await_approval:"等待确认或审批", execute_refund:"办理退款" };
+      for (const event of events.filter(e => e.kind !== "step_started" && e.kind !== "step_attempt_finished").slice(-30)) {
+        const row = document.createElement("p");
+        const task = (state.plan?.tasks || []).find(t => t.id === event.task_id);
+        const outcome = { step_succeeded:"完成", step_failed:"未完成", step_retry:"稍后重试",
+          step_waiting_user:"待补充信息", step_waiting_approval:"等待确认或审批", step_blocked:"暂停", step_cancelled:"已撤回" };
+        row.textContent = new Date(event.created_at * 1000).toLocaleTimeString() + " · " +
+          (task?.state.order_id || "退款申请") + " · " +
+          (event.kind === "plan_created" ? "已安排处理" : event.kind === "branch_replanned" ? "申请已修改，相关步骤重新核实" :
+           event.kind === "stale_result_discarded" ? "旧申请的处理结果已作废" : (names[event.detail.tool] || "处理") + "：" + (outcome[event.kind] || "已记录"));
+        list.appendChild(row);
+      }
+    } catch (err) { toast("处理记录读取失败：" + err.message); }
+  };
+
+  setInterval(async () => {
+    const sid = state.currentId;
+    if (!sid || !state.plan || state.loading || document.hidden) return;
+    try {
+      const plan = await api("/sessions/" + encodeURIComponent(sid) + "/plan");
+      if (state.currentId !== sid || state.loading) return;
+      renderPlan(plan);
+      const missing = (plan?.pending || []).filter(a => !Array.from(document.querySelectorAll("[data-approval-id]")).some(c => c.dataset.approvalId === a.approval_id));
+      if (missing.length) {
+        const turn = document.createElement("div");
+        el.thread.appendChild(turn);
+        showApproval(turn, { thread_id:sid, actions:missing });
+      }
+    } catch (_) { /* Next poll or an explicit refresh will retry. */ }
+  }, 5000);
 
   function renderTask(task) {
     const panel = document.getElementById("refundTask");
@@ -757,6 +843,8 @@ html[data-theme="dark"] .welcome-mark{
 
     s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
     s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/\[([^\]\n<>]+)\]\((\/voucher-center\?voucher=[A-Z0-9_-]+(?:&amp;store=[A-Z0-9_-]+&amp;arrival=[0-9A-Fa-fTtZz.+%:-]+)?)\)/g,
+      '<a href="$2">$1</a>');
     s = s.replace(/^#{1,6}\s+(.+)$/gm, "<h4>$1</h4>");
 
     s = s.replace(/(?:^|\n)((?:[-*]\s+.+(?:\n|$))+)/g, (m, body) => {
@@ -956,6 +1044,7 @@ html[data-theme="dark"] .welcome-mark{
   /* ============ 消息渲染 ============ */
   function clearThread() {
     renderTask(null);
+    renderPlan(null);
     el.thread.innerHTML = "";
   }
 
@@ -1137,6 +1226,7 @@ html[data-theme="dark"] .welcome-mark{
       const data = await api("/sessions/" + id + "/messages");
       renderHistory(data.messages);
       renderTask(data.refund_task);
+      renderPlan(data.refund_plan);
 
       // 刷新页面后如果还有待审批的操作，把确认卡片补回来
       if (data.pending && data.pending.length) {
@@ -1199,8 +1289,8 @@ html[data-theme="dark"] .welcome-mark{
   async function refreshApprovalCount() {
     if (!isApprover()) return;
     try {
-      const data = await api("/tickets?pending_only=true&limit=100");
-      const pending = (data.tickets || []).filter((t) => t.required_role === "approver");
+      const data = await api("/tickets?actionable_only=true&limit=100");
+      const pending = data.tickets || [];
       el.approvalCount.textContent = String(pending.length);
       el.approvalCount.hidden = pending.length === 0;
     } catch (_) {
@@ -1292,8 +1382,8 @@ html[data-theme="dark"] .welcome-mark{
     loading.textContent = "加载中…";
     el.queueList.appendChild(loading);
     try {
-      const data = await api("/tickets?pending_only=true&limit=100");
-      const pending = (data.tickets || []).filter((t) => t.required_role === "approver");
+      const data = await api("/tickets?actionable_only=true&limit=100");
+      const pending = data.tickets || [];
       el.queueList.innerHTML = "";
       if (!pending.length) {
         const empty = document.createElement("div");
@@ -1335,13 +1425,13 @@ html[data-theme="dark"] .welcome-mark{
     head.className = "approval-head";
     head.textContent = needsManager
       ? "🔐 高风险退款 · 已提交主管审批"
-      : "🔒 这是写操作，需要你确认后才会执行";
+      : "🔒 退款申请 · 请确认订单与原因";
     box.appendChild(head);
 
     for (const action of actions) {
       const tool = document.createElement("div");
       tool.className = "approval-tool";
-      tool.innerHTML = "即将调用 <code>" + escapeHtml(action.name || "工具") + "</code>";
+      tool.textContent = "申请办理退款";
       box.appendChild(tool);
 
       const args = document.createElement("div");
@@ -1380,7 +1470,7 @@ html[data-theme="dark"] .welcome-mark{
 
     const approve = document.createElement("button");
     approve.className = "approve";
-    approve.textContent = "批准执行";
+    approve.textContent = "确认退款";
 
     const edit = document.createElement("button");
     edit.className = "reject";
@@ -1480,12 +1570,14 @@ html[data-theme="dark"] .welcome-mark{
         }
       } else if (type === "interrupt") {
         renderTask(data.refund_task);
+        renderPlan(data.refund_plan);
         finished = true;
         interrupt = data;
       } else if (type === "error") {
         throw new Error(data.message || "流式回答失败");
       } else if (type === "done") {
         renderTask(data.refund_task);
+        renderPlan(data.refund_plan);
         finished = true;
       }
     };
@@ -1547,7 +1639,18 @@ html[data-theme="dark"] .welcome-mark{
 
   /* ============ 审批交互 ============ */
   function showApproval(turn, interrupt) {
+    for (const action of interrupt.actions || []) {
+      showSingleApproval(turn, { ...interrupt, actions: [action] });
+    }
+  }
+
+  function showSingleApproval(turn, interrupt) {
+    const action = interrupt.actions[0];
+    document.querySelectorAll("[data-approval-id]").forEach(c => {
+      if (c.dataset.approvalId === action.approval_id) c.remove();
+    });
     const card = approvalCard(interrupt.actions || []);
+    card.box.dataset.approvalId = action.approval_id || "";
     turn.appendChild(card.box);
     scrollToBottom();
 
@@ -1556,17 +1659,21 @@ html[data-theme="dark"] .welcome-mark{
     const editTask = async (cancel) => {
       card.edit.disabled = true;
       try {
-        const taskUrl = "/sessions/" + encodeURIComponent(interrupt.thread_id) + "/refund-task";
-        const task = await api(taskUrl);
+        const base = "/sessions/" + encodeURIComponent(interrupt.thread_id);
+        const taskUrl = action.task_id ? base + "/plan/tasks/" + encodeURIComponent(action.task_id) : base + "/refund-task";
+        const plan = action.task_id ? await api(base + "/plan") : null;
+        const task = plan ? plan.tasks.find(t => t.id === action.task_id)?.state : await api(taskUrl);
+        if (!task) throw new Error("申请状态已变化，请刷新后重试");
         const applyChange = async (values) => {
           const updated = await api(taskUrl, { method: "PATCH", body: JSON.stringify({
             expected_revision: task.revision, ...values,
           }) });
-          renderTask(updated);
+          if (action.task_id) renderPlan(updated); else renderTask(updated);
           const result = document.createElement("div");
           result.className = "approval-done no";
           result.textContent = cancel
             ? "申请已撤回。你可以继续咨询。"
+            : action.task_id ? "申请已修改，原审批已失效。请查看更新后的进度和确认卡片。"
             : "申请已修改，原审批已失效。请发送消息继续核实并提交。";
           card.acts.replaceWith(result);
           const form = card.box.querySelector("form");

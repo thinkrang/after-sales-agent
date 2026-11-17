@@ -4,7 +4,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
+import db
 import prune_checkpoints
+import tickets
 
 SESSION_FMT = "%Y-%m-%d %H:%M:%S"
 
@@ -114,3 +116,19 @@ def test_invalid_retention_is_rejected(tmp_path):
     sessions, memory = build(tmp_path)
     with pytest.raises(ValueError):
         prune_checkpoints.prune(sessions, memory, days=0, apply=True)
+
+
+def test_retention_preserves_session_with_pending_ticket(tmp_path, monkeypatch):
+    sessions, memory = build(tmp_path)
+    path = tmp_path / "tickets.sqlite"
+    monkeypatch.setattr(tickets, "DB_PATH", path)
+    tickets.init_tickets_table()
+    try:
+        pending = tickets.create_ticket("old", "A100", tenant_id="acme", requester_id="legacy")
+        report = prune_checkpoints.prune(sessions, memory, apply=True)
+        assert report["protected"] == ["old"]
+        assert remaining(sessions, "sessions") == 2
+        assert tickets.reject_ticket(pending["id"])
+        assert prune_checkpoints.prune(sessions, memory, apply=True)["sessions"] == 1
+    finally:
+        db.release_all()

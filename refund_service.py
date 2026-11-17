@@ -210,14 +210,17 @@ def decide(
 
     两条路径，权限模型不同：
 
-    - **本人路径**（``thread_id`` 必填）：客户在自己的会话里点确认。
-      只能处理 ``required_role='customer'`` 的工单。
+    - **本人路径**：客户确认低风险申请，或撤回任意仍待审批的本人申请。
+      高风险申请的批准仍必须由另一位审批人处理。
     - **主管路径**（``thread_id`` 为空）：``approver`` 角色从审批队列处理。
       只能处理 ``required_role='approver'`` 的工单，且**不能是发起人本人**。
 
     主管路径不校验 thread_id —— 主管不在客户那个会话里，用会话归属鉴权
     会把人挡在门外。这一路径的鉴权边界是「同租户 + 审批角色 + 非本人」。
     """
+    if decision not in {"approve", "reject"}:
+        raise ValueError("decision 必须是 approve 或 reject")
+
     ticket = tickets.get_ticket(
         approval_id, tenant_id=user.tenant_id, requester_id=user.username
     )
@@ -235,7 +238,10 @@ def decide(
 
     needs_manager = (ticket.get("required_role") or risk.ROLE_CUSTOMER) == risk.ROLE_APPROVER
 
-    if needs_manager:
+    if decision == "reject" and is_requester:
+        # 撤回只会减少授权；不能把批准所需的四眼校验套在本人撤回上。
+        pass
+    elif needs_manager:
         if not user.has_role(risk.ROLE_APPROVER):
             detail = "；".join(_risk_reasons(ticket)) or "风险等级为高"
             raise ApprovalForbidden(f"该退款需要主管审批（{detail}）")
@@ -261,7 +267,7 @@ def decide(
     elif decision == "reject":
         ok = tickets.reject_ticket(
             approval_id,
-            reason=(message or "审批人拒绝本次退款"),
+            reason=(message or ("发起人撤回本次退款" if is_requester else "审批人拒绝本次退款")),
             operator=user.username,
             **scope,
         )

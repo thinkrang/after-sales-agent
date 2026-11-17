@@ -25,6 +25,9 @@ def isolate_ticket_db(tmp_path_factory):
     import orders
     import tickets
     import settings
+    import os
+    original_worker = os.environ.get("PLAN_WORKER_ENABLED")
+    os.environ["PLAN_WORKER_ENABLED"] = "0"
 
     root = tmp_path_factory.mktemp("runtime-db")
     originals = {
@@ -40,6 +43,10 @@ def isolate_ticket_db(tmp_path_factory):
     tickets.init_tickets_table()
     orders.init_order_db()
     yield root
+    if original_worker is None:
+        os.environ.pop("PLAN_WORKER_ENABLED", None)
+    else:
+        os.environ["PLAN_WORKER_ENABLED"] = original_worker
     tickets.DB_PATH = originals["tickets"]
     auth.USER_DB = originals["auth"]
     orders.ORDERS_DB = originals["orders"]

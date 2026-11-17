@@ -5,6 +5,10 @@ CI 里只跑确定性场景（不调模型），因为安全性质不该依赖�
 """
 
 import action_eval
+import json
+import subprocess
+from types import SimpleNamespace
+import pytest
 
 
 def test_deterministic_action_scenarios():
@@ -26,3 +30,35 @@ def test_every_category_is_covered():
     """防止以后删场景把某一类安全性覆盖掉。"""
     cats = {s.category for s in action_eval.deterministic_scenarios()}
     assert cats == {"身份与租户", "审批绕过", "风险分级", "幂等与恢复", "状态机"}
+
+
+@pytest.mark.parametrize("kind", ["crash", "empty", "missing", "duplicate", "wrong_type", "timeout", "nonzero", "danger"])
+def test_model_runner_cannot_report_green_without_complete_success(monkeypatch, kind):
+    rows = [dict(id=f"M{i:02}", category="model", description="case", detail="ok", ok=True, danger=False)
+            for i in range(1, 9)]
+    if kind == "missing":
+        rows.pop()
+    if kind == "duplicate":
+        rows[-1]["id"] = "M01"
+    if kind == "wrong_type":
+        rows[0]["ok"] = "true"
+    if kind == "danger":
+        rows[0]["danger"] = True
+    def run(*args, **kwargs):
+        if kind == "timeout":
+            raise subprocess.TimeoutExpired("model", 1)
+        return SimpleNamespace(stdout="" if kind in {"empty", "crash"} else json.dumps(rows),
+                               stderr="error", returncode=1 if kind in {"crash", "nonzero"} else 0)
+    monkeypatch.setattr(action_eval.subprocess, "run", run)
+    report = action_eval.Report()
+    action_eval.run_model_scenarios(report)
+    assert report.failed
+
+
+def test_model_runner_accepts_all_eight_results(monkeypatch):
+    rows = [dict(id=f"M{i:02}", category="model", description="case", detail="ok", ok=True, danger=False)
+            for i in range(1, 9)]
+    monkeypatch.setattr(action_eval.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=json.dumps(rows), returncode=0))
+    report = action_eval.Report()
+    action_eval.run_model_scenarios(report)
+    assert report.count() == (8, 8) and not report.failed

@@ -1,0 +1,200 @@
+{
+  "date": "2026-11-10T13:00:26.565892+00:00",
+  "provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+  },
+  "python": "3.13.0 (tags/v3.13.0:60403a5, Oct  7 2024, 09:38:07) [MSC v.1941 64 bit (AMD64)]",
+  "executable": "<repo>\\work\\test-env\\Scripts\\python.exe",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "directory": "<repo>\\work\\planning-final\\run-i12izyls",
+  "with_model": false,
+  "stages": [
+    {
+      "name": "dependencies",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0,
+      "seconds": 1.91,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "packages",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0,
+      "seconds": 1.0,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "fresh-index",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-c",
+        "import rag; rag.build_index()"
+      ],
+      "exit_code": 0,
+      "seconds": 14.82,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "pytest",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pytest",
+        "-o",
+        "addopts=",
+        "-m",
+        "not llm",
+        "-q",
+        "--junitxml=<repo>\\work\\planning-final\\run-i12izyls\\pytest.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 92.34,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "actions",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "action_eval.py",
+        "--output",
+        "<repo>\\work\\planning-final\\run-i12izyls\\actions.json"
+      ],
+      "exit_code": 0,
+      "seconds": 18.55,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "tasks",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "task_eval.py",
+        "--repeat",
+        "3",
+        "--output",
+        "<repo>\\work\\planning-final\\run-i12izyls\\tasks.json"
+      ],
+      "exit_code": 0,
+      "seconds": 3.21,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "plans",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "plan_eval.py",
+        "--repeat",
+        "3",
+        "--output",
+        "<repo>\\work\\planning-final\\run-i12izyls\\plans.json"
+      ],
+      "exit_code": 0,
+      "seconds": 4.51,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "refresh-index",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "-c",
+        "import rag; rag.build_index()"
+      ],
+      "exit_code": 0,
+      "seconds": 15.04,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "rrf",
+      "command": [
+        "<repo>\\work\\test-env\\Scripts\\python.exe",
+        "-X",
+        "utf8",
+        "tune_rrf.py",
+        "--holdout",
+        "--output",
+        "<repo>\\work\\planning-final\\run-i12izyls\\rrf.json"
+      ],
+      "exit_code": 0,
+      "seconds": 29.09,
+      "provenance": {
+        "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+        "dirty": true,
+        "source_sha256": "7d609ab555e1aeadcfecf7b0ba1fe32880c5876fa81dec510d05f8d3dd0f195f"
+      },
+      "source_unchanged": true
+    }
+  ],
+  "docker": {
+    "daemon_available": false,
+    "container_acceptance": "not_run"
+  },
+  "completed_at": "2026-11-10T13:03:27.776333+00:00",
+  "source_unchanged": true
+}

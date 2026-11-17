@@ -26,8 +26,11 @@ jobs:
             settings.py db.py auth.py orders.py tickets.py risk.py refund_service.py \
             api.py rag.py tasks.py rebuild_index.py reconcile_refunds.py \
             action_eval.py action_eval_model.py refund_tasks.py task_eval.py task_eval_model.py \
-            refund_flow.py session_guard.py task_scenarios.py agent_context.py long_memory.py \
-            tool_result.py prune_checkpoints.py evidence.py mcp_tools.py mcp_server.py
+            refund_flow.py session_guard.py task_scenarios.py agent_context.py agent_runtime.py long_memory.py \
+            tool_result.py prune_checkpoints.py evidence.py mcp_tools.py mcp_server.py \
+            planning.py plan_store.py orchestrator.py plan_eval.py scripts/recover_plans.py \
+            voucher_api.py voucher_disputes.py voucher_policy.py scripts/replay_voucher_policy.py \
+            scripts/run_voucher_demo.py
 
       # 这一组是安全与业务的核心回归：
       #   test_refund_workflow  审批绑定、原子迁移、幂等、失败重试语义
@@ -45,7 +48,10 @@ jobs:
         run: |
           python -X utf8 -m pytest \
             tests/test_refund_workflow.py \
+            tests/test_voucher_disputes.py \
+            tests/test_voucher_policy_replay.py \
             tests/test_refund_tasks.py \
+            tests/test_planning.py \
             tests/test_task_evaluation.py \
             tests/test_runtime_isolation.py \
             tests/test_tickets.py \
@@ -71,17 +77,27 @@ jobs:
       - name: Task postcondition regression report
         run: python task_eval.py --repeat 2 --output work/task-system.json
 
+      - name: Plan and replanning regression reports
+        run: |
+          python plan_eval.py --repeat 1 --output work/plan-system.json
+          python scripts/compare_replanning.py --repeat 1 --output work/replan-comparison.json
+          python scripts/replay_voucher_policy.py --output-dir work/voucher-replay
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: deterministic-task-report
-          path: work/task-system.json
+          path: |
+            work/task-system.json
+            work/plan-system.json
+            work/replan-comparison.json
+            work/voucher-replay/
 
       - name: Check inline frontend JavaScript syntax
         run: |
           node -e '
             const fs = require("fs");
-            for (const file of ["index.html", "knowledge.html"]) {
+            for (const file of ["index.html", "knowledge.html", "voucher_center.html"]) {
               const html = fs.readFileSync(file, "utf8");
               for (const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
                 new Function(match[1]);
@@ -107,4 +123,4 @@ jobs:
           langgraph-checkpoint==4.3.0 langchain-openai==1.7.2
           langgraph-checkpoint-sqlite==3.1.2 openai==3.35.1
       - name: Real HITL and SQLite task integration (scripted model)
-        run: python -X utf8 -m pytest tests/test_task_http.py tests/test_detached_tasks.py tests/test_refund_flow.py tests/test_context_memory.py
+        run: python -X utf8 -m pytest tests/test_task_http.py tests/test_detached_tasks.py tests/test_plan_http.py tests/test_refund_flow.py tests/test_context_memory.py tests/test_agent_runtime.py

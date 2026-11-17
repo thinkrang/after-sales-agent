@@ -1,0 +1,179 @@
+{
+  "date": "2026-11-10T11:36:55.864795+00:00",
+  "provenance": {
+    "commit": null,
+    "dirty": false,
+    "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+  },
+  "python": "3.12.15 (main, Oct  6 2026, 02:02:22) [GCC 14.2.0]",
+  "executable": "/usr/local/bin/python",
+  "platform": "Linux-6.18.58.1-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+  "directory": "/verification/run-u5tumvpj",
+  "with_model": false,
+  "stages": [
+    {
+      "name": "dependencies",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0,
+      "seconds": 1.28,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "packages",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "freeze"
+      ],
+      "exit_code": 0,
+      "seconds": 1.03,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "fresh-index",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "-c",
+        "import rag; rag.build_index()"
+      ],
+      "exit_code": 0,
+      "seconds": 14.89,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "pytest",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "-m",
+        "pytest",
+        "-o",
+        "addopts=",
+        "-m",
+        "not llm",
+        "-q",
+        "--junitxml=/verification/run-u5tumvpj/pytest.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 48.0,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "actions",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "action_eval.py",
+        "--output",
+        "/verification/run-u5tumvpj/actions.json"
+      ],
+      "exit_code": 0,
+      "seconds": 9.26,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "tasks",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "task_eval.py",
+        "--repeat",
+        "3",
+        "--output",
+        "/verification/run-u5tumvpj/tasks.json"
+      ],
+      "exit_code": 0,
+      "seconds": 2.84,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "refresh-index",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "-c",
+        "import rag; rag.build_index()"
+      ],
+      "exit_code": 0,
+      "seconds": 14.15,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    },
+    {
+      "name": "rrf",
+      "command": [
+        "/usr/local/bin/python",
+        "-X",
+        "utf8",
+        "tune_rrf.py",
+        "--holdout",
+        "--output",
+        "/verification/run-u5tumvpj/rrf.json"
+      ],
+      "exit_code": 0,
+      "seconds": 44.99,
+      "provenance": {
+        "commit": null,
+        "dirty": false,
+        "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+      },
+      "source_unchanged": true
+    }
+  ],
+  "docker": {
+    "daemon_available": false,
+    "container_acceptance": "not_run"
+  },
+  "completed_at": "2026-11-10T11:39:12.398826+00:00",
+  "source_unchanged": true
+}

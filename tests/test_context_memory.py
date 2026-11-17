@@ -1,3 +1,4 @@
+import logging
 import time
 from types import SimpleNamespace
 
@@ -7,6 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain.tools import tool
 
 from agent_context import ContextBoundary, Limits, compress
+import agent_runtime
 import db
 import long_memory
 import tickets
@@ -202,11 +204,17 @@ def test_request_compaction_keeps_checkpoint_and_reloads_pending_task(task_api):
     assert tickets.get_ticket(ticket["id"])["status"] == "pending_approval"
 
 
-def test_boundary_reason_is_visible_in_sse_and_history(task_api):
+def test_boundary_reason_is_visible_in_sse_and_history(task_api, caplog):
     api, client, sid, model = task_api
+    caplog.set_level(logging.INFO, logger=agent_runtime.LOGGER.name)
     api.app.state.agent = create_agent(model=model, tools=[], middleware=[ContextBoundary(Limits(model_calls=0))],
                                        checkpointer=api.app.state.memory)
     r = client.post("/chat/stream", json={"thread_id": sid, "message": "你好"})
     events = parse_sse(r.text)
     assert any(k == "done" for k, _ in events), events
     assert "上限" in "".join(d.get("text", "") for k, d in events if k == "token"), events
+    trace = [record.agent_event for record in caplog.records if hasattr(record, "agent_event")]
+    assert [(row["event"], row.get("reason") or row.get("outcome")) for row in trace] == [
+        ("turn_stop", "model_limit"), ("request_end", "response_sent"),
+    ]
+    assert trace[0]["turn_id"] == trace[1]["turn_id"]

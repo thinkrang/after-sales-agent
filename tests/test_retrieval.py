@@ -113,7 +113,7 @@ def test_format_evidence_empty():
     assert format_evidence([]) == "没有找到相关文档。"
 
 
-@pytest.mark.parametrize("bad_top_k", [0, -1, 11])
+@pytest.mark.parametrize("bad_top_k", [0, -1, 101])
 def test_debug_retrieval_rejects_bad_top_k(bad_top_k):
     with pytest.raises(ValueError):
         debug_retrieval(QUESTION, bad_top_k)

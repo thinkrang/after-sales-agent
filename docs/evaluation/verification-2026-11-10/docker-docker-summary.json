@@ -1,0 +1,71 @@
+{
+  "host_provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+  },
+  "directory": "<repo>\\work\\priority-one-docker\\run-6h2dombd",
+  "image": "after-sales-verification:priority-one-20261110",
+  "steps": [
+    {
+      "name": "verification",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--env-file",
+        "<repo>\\.env",
+        "--mount",
+        "type=bind,source=<local-path>",
+        "--mount",
+        "type=bind,source=<repo>\\work\\priority-one-docker\\run-6h2dombd,target=/verification",
+        "-e",
+        "HF_HUB_OFFLINE=1",
+        "-e",
+        "TRANSFORMERS_OFFLINE=1",
+        "after-sales-verification:priority-one-20261110",
+        "python",
+        "-X",
+        "utf8",
+        "scripts/verify_project.py",
+        "--output",
+        "/verification"
+      ],
+      "exit_code": 0,
+      "seconds": 138.71
+    },
+    {
+      "name": "acceptance",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--env-file",
+        "<repo>\\.env",
+        "--mount",
+        "type=bind,source=<local-path>",
+        "--mount",
+        "type=bind,source=<repo>\\work\\priority-one-docker\\run-6h2dombd,target=/verification",
+        "-e",
+        "HF_HUB_OFFLINE=1",
+        "-e",
+        "TRANSFORMERS_OFFLINE=1",
+        "-e",
+        "AGENT_VECTOR_DB_DIR=/verification/run-u5tumvpj/vector_db",
+        "-e",
+        "AGENT_UPLOAD_DIR=/verification/uploads",
+        "after-sales-verification:priority-one-20261110",
+        "python",
+        "-X",
+        "utf8",
+        "scripts/acceptance_e2e.py",
+        "--output",
+        "/verification/acceptance.json"
+      ],
+      "exit_code": 0,
+      "seconds": 59.61
+    }
+  ],
+  "image_id": "sha256:4af3886795271d294662f5082831608aa83b7362565155f9d36c6bb8f7c2c2ae",
+  "source_matches_host": true
+}

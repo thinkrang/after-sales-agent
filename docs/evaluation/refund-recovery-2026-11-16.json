@@ -1,0 +1,731 @@
+{
+  "completed_at": "2026-11-16T06:11:50.545486+00:00",
+  "python": "3.13.0",
+  "source": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "faa66a1593aa2a2e1a670355cfe9676b174eac6ef1ad221be14d3bb8cf295598"
+  },
+  "source_manifest_sha256": "b8f41a4d351ea6a162ceaf2abcffadc7983781b43ccf3a427beaebc6f22dade6",
+  "checks": [
+    {
+      "name": "dependencies",
+      "exit_code": 0
+    },
+    {
+      "name": "packages",
+      "exit_code": 0
+    },
+    {
+      "name": "fresh-index",
+      "exit_code": 0
+    },
+    {
+      "name": "pytest",
+      "exit_code": 0
+    },
+    {
+      "name": "actions",
+      "exit_code": 0
+    },
+    {
+      "name": "tasks",
+      "exit_code": 0
+    },
+    {
+      "name": "plans",
+      "exit_code": 0
+    },
+    {
+      "name": "replanning",
+      "exit_code": 0
+    },
+    {
+      "name": "refresh-index",
+      "exit_code": 0
+    },
+    {
+      "name": "rrf",
+      "exit_code": 0
+    }
+  ],
+  "pytest": {
+    "passed": 323,
+    "skipped": 1,
+    "deselected": 2
+  },
+  "actions": {
+    "passed": 36,
+    "total": 36,
+    "dangerous": 0
+  },
+  "single_task_system": {
+    "passed": 24,
+    "total": 24
+  },
+  "multi_task_system": {
+    "passed": 21,
+    "total": 21,
+    "unsafe_refunds_before_approval": 0
+  },
+  "replanning": {
+    "unit": "business step attempts after edit",
+    "repeats_per_variant": 10,
+    "rows": [
+      {
+        "repeat": 1,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 1,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 1,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 1,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 1,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 1,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 2,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 2,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 2,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 2,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 2,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 2,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 3,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 3,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 3,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 3,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 3,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 3,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 4,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 4,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 4,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 4,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 4,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 4,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 5,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 5,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 5,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 5,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 5,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 5,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 6,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 6,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 6,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 6,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 6,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 6,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 7,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 7,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 7,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 7,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 7,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 7,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 8,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 8,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 8,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 8,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 8,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 8,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 9,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 9,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 9,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 9,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 9,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 9,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 10,
+        "change": "reason",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 10,
+        "change": "reason",
+        "variant": "local",
+        "business_step_attempts": 1,
+        "executed_actions": [
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 10,
+        "change": "order",
+        "variant": "full_branch",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 10,
+        "change": "order",
+        "variant": "local",
+        "business_step_attempts": 3,
+        "executed_actions": [
+          "lookup_order",
+          "check_policy",
+          "request_refund"
+        ],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 10,
+        "change": "withdraw",
+        "variant": "full_branch",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      },
+      {
+        "repeat": 10,
+        "change": "withdraw",
+        "variant": "local",
+        "business_step_attempts": 0,
+        "executed_actions": [],
+        "completed_sibling_preserved": true
+      }
+    ]
+  },
+  "clean_demo": {
+    "passed": true,
+    "deps": [
+      "fastapi",
+      "pydantic",
+      "python-dotenv"
+    ],
+    "refund_orders": [
+      "A300",
+      "A400"
+    ]
+  },
+  "model_trial": {
+    "status": "blocked",
+    "http_status": 402,
+    "provider": "DeepSeek",
+    "case": "dual",
+    "variant": "fixed",
+    "observed_calls": 1,
+    "source": {
+      "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+      "dirty": true,
+      "source_sha256": "8b792dcf4d358affed7421db63ddf34e3b90a0d6169110d43d0f27f47c60122e"
+    }
+  },
+  "rag_holdout_recall_at_3": {
+    "cases": 11,
+    "pure_vector": 1.0,
+    "hybrid": 0.9090909090909091
+  },
+  "docker": {
+    "daemon_available": false,
+    "container_acceptance": "not_run"
+  }
+}

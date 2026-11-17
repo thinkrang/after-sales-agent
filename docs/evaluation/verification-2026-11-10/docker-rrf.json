@@ -1,0 +1,4149 @@
+{
+  "date": "2026-11-10T11:39:09.456410+00:00",
+  "provenance": {
+    "commit": null,
+    "dirty": false,
+    "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+  },
+  "selection": "dev recall3, then mrr10, then GRID order",
+  "production_top_k": 3,
+  "diagnostic_top_k": 10,
+  "tenant": "public",
+  "dataset_sha256": "2579366f1064f2d7b5b8d0693fade795bfa4abcefed04b2d6b314429be8bbbb7",
+  "corpus_sha256": "dbcb014d773398fd944a583391a63e7d6068d670ca5d1a05b1b2d6d139ef4ded",
+  "chunks": 152,
+  "dev_ids": [
+    "E01",
+    "E02",
+    "E03",
+    "E04",
+    "E06",
+    "E07",
+    "E08",
+    "E09",
+    "E10",
+    "E11",
+    "E12",
+    "E14",
+    "E15",
+    "E16",
+    "E17",
+    "E18",
+    "E19",
+    "E20",
+    "P01",
+    "P02",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P11",
+    "P12",
+    "P13",
+    "P14",
+    "M01",
+    "M03",
+    "M04",
+    "M05",
+    "N06",
+    "N07",
+    "N09",
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C07",
+    "C08",
+    "C09",
+    "C10",
+    "V01",
+    "V02",
+    "V03",
+    "V04",
+    "V05",
+    "V06",
+    "TM01",
+    "TM02",
+    "TM03",
+    "TM04",
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "N11",
+    "N12"
+  ],
+  "holdout_ids": [
+    "E05",
+    "E13",
+    "P03",
+    "P10",
+    "P15",
+    "M02",
+    "N02",
+    "N04",
+    "N05",
+    "N08",
+    "N10"
+  ],
+  "dev": [
+    {
+      "vector_weight": 1.0,
+      "bm25_weight": 0.0,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9104477611940298,
+      "recall": 0.9552238805970149,
+      "hit1": 0.8059701492537313,
+      "mrr": 0.869337834636342,
+      "p50": 27.83194400001321,
+      "p95": 37.63392350001596,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 8,
+          "production_rank": null
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 5,
+          "production_rank": null
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 4,
+          "production_rank": null
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": 7,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": 9,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 4,
+          "production_rank": null
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    },
+    {
+      "vector_weight": 0.9,
+      "bm25_weight": 0.1,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9552238805970149,
+      "recall": 0.9701492537313433,
+      "hit1": 0.7761194029850746,
+      "mrr": 0.8629767827529022,
+      "p50": 26.696094000044468,
+      "p95": 45.26164709998286,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 4,
+          "production_rank": null
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": 8,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": 9,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    },
+    {
+      "vector_weight": 0.8,
+      "bm25_weight": 0.2,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9552238805970149,
+      "recall": 0.9701492537313433,
+      "hit1": 0.7761194029850746,
+      "mrr": 0.8679519071310117,
+      "p50": 27.779660999954103,
+      "p95": 38.098480600058345,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 4,
+          "production_rank": null
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": 8,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": 9,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    },
+    {
+      "vector_weight": 0.7,
+      "bm25_weight": 0.3,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9701492537313433,
+      "recall": 0.9701492537313433,
+      "hit1": 0.7910447761194029,
+      "mrr": 0.8766583747927031,
+      "p50": 25.917165000009845,
+      "p95": 33.480417399982805,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": 8,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": 9,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    },
+    {
+      "vector_weight": 0.6,
+      "bm25_weight": 0.4,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9701492537313433,
+      "recall": 0.9701492537313433,
+      "hit1": 0.7910447761194029,
+      "mrr": 0.8791459369817579,
+      "p50": 30.5488989999958,
+      "p95": 60.82251299999379,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": 8,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": 9,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    },
+    {
+      "vector_weight": 0.5,
+      "bm25_weight": 0.5,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9701492537313433,
+      "recall": 0.9701492537313433,
+      "hit1": 0.7910447761194029,
+      "mrr": 0.873134328358209,
+      "p50": 28.230160000020987,
+      "p95": 35.86668160002092,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    },
+    {
+      "vector_weight": 0.4,
+      "bm25_weight": 0.6,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9253731343283582,
+      "recall": 0.9253731343283582,
+      "hit1": 0.835820895522388,
+      "mrr": 0.8781094527363184,
+      "p50": 33.515266999984306,
+      "p95": 53.71381939992262,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    },
+    {
+      "vector_weight": 0.0,
+      "bm25_weight": 1.0,
+      "name": "hybrid",
+      "total": 67,
+      "recall3": 0.9104477611940298,
+      "recall": 0.9253731343283582,
+      "hit1": 0.7910447761194029,
+      "mrr": 0.849502487562189,
+      "p50": 30.399114000033478,
+      "p95": 43.80255259991373,
+      "detail": [
+        {
+          "id": "E01",
+          "type": "easy",
+          "question": "商品编号001的单价是多少？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E02",
+          "type": "easy",
+          "question": "休闲卫衣多少钱一件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E03",
+          "type": "easy",
+          "question": "运动长裤的库存有多少件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E04",
+          "type": "easy",
+          "question": "纯棉短袖T恤还有多少库存？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E06",
+          "type": "easy",
+          "question": "退货对商品状态有什么要求？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "E07",
+          "type": "easy",
+          "question": "超过7天还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E08",
+          "type": "easy",
+          "question": "商品存在质量问题应该怎么处理？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E09",
+          "type": "easy",
+          "question": "付款成功后多久发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E10",
+          "type": "easy",
+          "question": "默认使用什么快递发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E11",
+          "type": "easy",
+          "question": "怎么查询订单的物流状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E12",
+          "type": "easy",
+          "question": "超过48小时还没发货应该怎么办？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E14",
+          "type": "easy",
+          "question": "100积分可以兑换什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E15",
+          "type": "easy",
+          "question": "积分兑换的优惠券有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E16",
+          "type": "easy",
+          "question": "会员生日当天可以领取什么？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E17",
+          "type": "easy",
+          "question": "生日优惠券的有效期是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E18",
+          "type": "easy",
+          "question": "生日优惠券每年可以领取几次？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E19",
+          "type": "easy",
+          "question": "每位员工每年需要完成多少小时的安全培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "E20",
+          "type": "easy",
+          "question": "安全培训考试多少分算合格？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P01",
+          "type": "paraphrase",
+          "question": "我想买件跑步穿的裤子，价格是多少？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P02",
+          "type": "paraphrase",
+          "question": "那件五十九块的上衣还有货吗？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "P04",
+          "type": "paraphrase",
+          "question": "退回去的商品需要保持什么状态？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P05",
+          "type": "paraphrase",
+          "question": "下完单多久能发出来？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P06",
+          "type": "paraphrase",
+          "question": "快递单号在哪里可以查到？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P07",
+          "type": "paraphrase",
+          "question": "积分能换成钱吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P08",
+          "type": "paraphrase",
+          "question": "兑换来的券多长时间会失效？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P09",
+          "type": "paraphrase",
+          "question": "我过生日有什么优惠吗？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "P11",
+          "type": "paraphrase",
+          "question": "公司对员工的信息安全培训有学时要求吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P12",
+          "type": "paraphrase",
+          "question": "培训结束之后要考试吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P13",
+          "type": "paraphrase",
+          "question": "那件卫衣卖多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "P14",
+          "type": "paraphrase",
+          "question": "长裤还剩多少条？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M01",
+          "type": "multihop",
+          "question": "买100元的卫衣能攒多少积分？这些积分能换多少钱的券？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M03",
+          "type": "multihop",
+          "question": "买3件运动长裤一共要多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "M04",
+          "type": "multihop",
+          "question": "商品签收第10天发现质量问题，还能申请售后吗？",
+          "rank": 3,
+          "production_rank": 3
+        },
+        {
+          "id": "M05",
+          "type": "multihop",
+          "question": "一件129元的卫衣加一件59元的T恤，总价多少？能攒多少积分？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N06",
+          "type": "negative",
+          "question": "安全培训是在线上进行还是线下集中培训？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N07",
+          "type": "negative",
+          "question": "纯棉短袖T恤有几种颜色可以选？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N09",
+          "type": "negative",
+          "question": "发货使用的是哪家快递公司？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C01",
+          "type": "easy",
+          "question": "大家电签收后几天内可以无理由退货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C02",
+          "type": "easy",
+          "question": "生鲜商品签收后多久内要提出售后？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C03",
+          "type": "easy",
+          "question": "内衣拆封后还能无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C04",
+          "type": "easy",
+          "question": "定制商品可以无理由退货吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "C05",
+          "type": "easy",
+          "question": "图书拆封后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C06",
+          "type": "easy",
+          "question": "化妆品拆封使用后还能退吗？",
+          "rank": 4,
+          "production_rank": null
+        },
+        {
+          "id": "C07",
+          "type": "easy",
+          "question": "奶粉拆封后能退换吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C08",
+          "type": "easy",
+          "question": "数码产品激活后还能退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C09",
+          "type": "easy",
+          "question": "黄金饰品退货按什么价格折算？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "C10",
+          "type": "easy",
+          "question": "家具退货运费大概多少钱？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V01",
+          "type": "conflict",
+          "question": "金卡会员现在打几折？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "V02",
+          "type": "conflict",
+          "question": "价格保护期现在是多久？",
+          "rank": null,
+          "production_rank": null
+        },
+        {
+          "id": "V03",
+          "type": "conflict",
+          "question": "质量问题退货的运费谁承担？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V04",
+          "type": "conflict",
+          "question": "会员折扣能和优惠券叠加使用吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "V05",
+          "type": "conflict",
+          "question": "促销活动期间产生的价差能申请价格保护吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "V06",
+          "type": "conflict",
+          "question": "同一个订单可以申请几次价格保护？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM01",
+          "type": "temporal",
+          "question": "双11活动期间下单的商品，退货时限是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM02",
+          "type": "temporal",
+          "question": "双11活动期间发货时效是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM03",
+          "type": "temporal",
+          "question": "春节期间什么时候停止发货？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "TM04",
+          "type": "temporal",
+          "question": "运动长裤现在卖多少钱？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "F01",
+          "type": "easy",
+          "question": "换货可以换成其他商品吗？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "F02",
+          "type": "easy",
+          "question": "维修周期一般是多久？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F03",
+          "type": "easy",
+          "question": "部分退款会退回优惠券吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F04",
+          "type": "easy",
+          "question": "用礼品卡支付的订单退款退到哪里？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F05",
+          "type": "easy",
+          "question": "跨境商品可以无理由退货吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F06",
+          "type": "easy",
+          "question": "团购订单可以只退其中一件吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "F07",
+          "type": "easy",
+          "question": "售后审核通过后几天内要寄回商品？",
+          "rank": 2,
+          "production_rank": 2
+        },
+        {
+          "id": "F08",
+          "type": "easy",
+          "question": "物流信息多久没更新可以发起查件？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N11",
+          "type": "negative",
+          "question": "会员积分可以转赠给其他账号吗？",
+          "rank": 1,
+          "production_rank": 1
+        },
+        {
+          "id": "N12",
+          "type": "negative",
+          "question": "可以指定用顺丰发货吗？",
+          "rank": 1,
+          "production_rank": 1
+        }
+      ]
+    }
+  ],
+  "selected": [
+    0.6,
+    0.4
+  ],
+  "holdout": {
+    "vector_weight": 0.6,
+    "bm25_weight": 0.4,
+    "name": "hybrid",
+    "total": 11,
+    "recall3": 0.9090909090909091,
+    "recall": 1.0,
+    "hit1": 0.9090909090909091,
+    "mrr": 0.9318181818181818,
+    "p50": 33.60645099996873,
+    "p95": 40.035766500011505,
+    "detail": [
+      {
+        "id": "E05",
+        "type": "easy",
+        "question": "商品签收后几天内可以无理由退货？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "E13",
+        "type": "easy",
+        "question": "普通会员每消费1元可以获得多少积分？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "P03",
+        "type": "paraphrase",
+        "question": "东西收到八天了，不想要了还能退吗？",
+        "rank": 4,
+        "production_rank": null
+      },
+      {
+        "id": "P10",
+        "type": "paraphrase",
+        "question": "生日礼券能用到什么时候？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "P15",
+        "type": "paraphrase",
+        "question": "在你们店买东西能攒积分吗？怎么算的？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "M02",
+        "type": "multihop",
+        "question": "生日券和积分兑换的券，哪个有效期更长？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N02",
+        "type": "negative",
+        "question": "休闲卫衣有XL码吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N04",
+        "type": "negative",
+        "question": "积分可以直接兑换商品吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N05",
+        "type": "negative",
+        "question": "生日优惠券可以和满减活动叠加使用吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N08",
+        "type": "negative",
+        "question": "会员积分会每年清零吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N10",
+        "type": "negative",
+        "question": "安全培训考试不合格可以补考吗？",
+        "rank": 1,
+        "production_rank": 1
+      }
+    ]
+  },
+  "holdout_baseline": {
+    "vector_weight": 1.0,
+    "bm25_weight": 0.0,
+    "name": "hybrid",
+    "total": 11,
+    "recall3": 1.0,
+    "recall": 1.0,
+    "hit1": 0.9090909090909091,
+    "mrr": 0.9545454545454546,
+    "p50": 29.995058000054087,
+    "p95": 32.527291999940644,
+    "detail": [
+      {
+        "id": "E05",
+        "type": "easy",
+        "question": "商品签收后几天内可以无理由退货？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "E13",
+        "type": "easy",
+        "question": "普通会员每消费1元可以获得多少积分？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "P03",
+        "type": "paraphrase",
+        "question": "东西收到八天了，不想要了还能退吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "P10",
+        "type": "paraphrase",
+        "question": "生日礼券能用到什么时候？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "P15",
+        "type": "paraphrase",
+        "question": "在你们店买东西能攒积分吗？怎么算的？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "M02",
+        "type": "multihop",
+        "question": "生日券和积分兑换的券，哪个有效期更长？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N02",
+        "type": "negative",
+        "question": "休闲卫衣有XL码吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N04",
+        "type": "negative",
+        "question": "积分可以直接兑换商品吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N05",
+        "type": "negative",
+        "question": "生日优惠券可以和满减活动叠加使用吗？",
+        "rank": 2,
+        "production_rank": 2
+      },
+      {
+        "id": "N08",
+        "type": "negative",
+        "question": "会员积分会每年清零吗？",
+        "rank": 1,
+        "production_rank": 1
+      },
+      {
+        "id": "N10",
+        "type": "negative",
+        "question": "安全培训考试不合格可以补考吗？",
+        "rank": 1,
+        "production_rank": 1
+      }
+    ]
+  }
+}

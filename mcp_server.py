@@ -59,8 +59,8 @@ def search_shop_info(question: str, ctx: Context) -> str:
 
 
 @server.tool(description="读取当前用户的退款任务状态、缺失字段与下一步建议")
-def get_refund_task(ctx: Context) -> str:
-    return mcp_tools.get_refund_task(_user(ctx))
+def get_refund_task(ctx: Context, task_id: str | None = None) -> str:
+    return mcp_tools.get_refund_task(_user(ctx), task_id)
 
 
 @server.tool(description="查询当前用户最近三条已结束的售后记录（只读，带工单来源）")
@@ -69,8 +69,9 @@ def recall_after_sales_history(ctx: Context) -> str:
 
 
 @server.tool(description="登记退款并创建待审批工单；不会执行退款")
-def prepare_refund(order_id: str, reason: str, ctx: Context) -> str:
-    return mcp_tools.prepare_refund(_user(ctx), order_id, reason)
+def prepare_refund(order_id: str, reason: str, ctx: Context,
+                   task_id: str | None = None, expected_revision: int | None = None) -> str:
+    return mcp_tools.prepare_refund(_user(ctx), order_id, reason, task_id, expected_revision)
 
 
 def main() -> int:
@@ -80,6 +81,13 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
+
+    import auth
+    import orders
+    import tickets
+    auth.init_auth_db(seed_demo_users=os.getenv("AUTH_SEED_DEMO_USERS", "1") != "0")
+    tickets.init_tickets_table()
+    orders.init_order_db()
 
     if args.transport == "stdio":
         server.run("stdio")

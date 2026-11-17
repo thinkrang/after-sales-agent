@@ -29,7 +29,7 @@ from functools import lru_cache
 import jieba
 from rank_bm25 import BM25Okapi
 
-from rag import DEFAULT_TENANT, debug_retrieval, get_vector_store, visible_tenants
+from rag import DEFAULT_TENANT, debug_retrieval, get_vector_store, index_revision, visible_tenants
 
 # RRF 常数，经验值 60
 RRF_K = 60
@@ -90,7 +90,6 @@ def tokenize(text: str) -> list[str]:
 # ---------------------------------------------------------------- 语料快照
 
 
-@lru_cache(maxsize=1)
 def _corpus():
     """把整个集合读进内存，作为 BM25 的语料。
 
@@ -98,6 +97,11 @@ def _corpus():
     注意：这里假设集合在评测/运行期间不变。增删文档后需要调
     refresh_corpus() 清缓存，否则 BM25 会检索到已删除的旧内容。
     """
+    return _cached_corpus(index_revision())
+
+
+@lru_cache(maxsize=1)
+def _cached_corpus(revision: str):
     store = get_vector_store()
     raw = store.get(include=["documents", "metadatas"])
     ids = raw.get("ids") or []
@@ -108,12 +112,19 @@ def _corpus():
 
 def refresh_corpus() -> None:
     """索引发生变化后调用，清掉 BM25 语料缓存。"""
-    _corpus.cache_clear()
+    _cached_bm25.cache_clear()
+    _cached_corpus.cache_clear()
+
+
+def _bm25():
+    return _cached_bm25(index_revision())
 
 
 @lru_cache(maxsize=1)
-def _bm25():
-    ids, docs, metas = _corpus()
+def _cached_bm25(revision: str):
+    ids, docs, metas = _cached_corpus(revision)
+    if not docs:
+        return None, ids, docs, metas
     tokenized = [tokenize(d) for d in docs]
     return BM25Okapi(tokenized), ids, docs, metas
 
@@ -146,6 +157,8 @@ def bm25_retrieval(
     否则可见文档会被无权限文档挤出候选。
     """
     bm25, ids, docs, metas = _bm25()
+    if bm25 is None:
+        return []
     scores = bm25.get_scores(tokenize(question))
 
     order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
@@ -188,6 +201,8 @@ def _rrf_fuse(
 
     scores: dict[str, float] = {}
     for ranking, weight in zip(rankings, weights):
+        if weight == 0:
+            continue
         for rank, doc_id in enumerate(ranking, start=1):
             scores[doc_id] = scores.get(doc_id, 0.0) + weight / (k + rank)
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -212,16 +227,14 @@ def hybrid_retrieval(
     ids, docs, metas = _corpus()
     id_to_idx = {doc_id: i for i, doc_id in enumerate(ids)}
 
-    # 向量结果没有 id，用内容反查（当前语料每篇 1 个 chunk，内容唯一）
-    content_to_id = {d: ids[i] for i, d in enumerate(docs)}
-
-    vec_ids = []
-    for item in vec:
-        doc_id = content_to_id.get(item["content"])
-        if doc_id:
-            vec_ids.append(doc_id)
-
-    kw_ids = [item["id"] for item in kw]
+    allowed = set(visible_tenants(tenant))
+    visible_ids = {
+        doc_id for doc_id, idx in id_to_idx.items()
+        if ((metas[idx] or {}).get("tenant") or DEFAULT_TENANT) in allowed
+    }
+    # Chroma 返回稳定 chunk id。相同文本可能属于不同租户，不能按正文反查 id。
+    vec_ids = [item["id"] for item in vec if item.get("id") in visible_ids]
+    kw_ids = [item["id"] for item in kw if item.get("id") in visible_ids]
 
     fused = _rrf_fuse([vec_ids, kw_ids], weights=[VECTOR_WEIGHT, BM25_WEIGHT])
 
@@ -235,6 +248,7 @@ def hybrid_retrieval(
             "rank": rank,
             "id": doc_id,
             "source": meta.get("source", "未知文档"),
+            "tenant": meta.get("tenant") or DEFAULT_TENANT,
             "page": meta.get("page"),
             "rrf_score": round(score, 6),
             "content": docs[idx],
@@ -277,6 +291,8 @@ def hybrid_rerank_retrieval(
 
     # 召回阶段多取一些，给精排留出重排空间
     candidates = hybrid_retrieval(question, max(top_k * 3, 10), tenant=tenant)
+    if not candidates:
+        return []
 
     pairs = [(question, item["content"]) for item in candidates]
     scores = model.predict(pairs)
@@ -320,6 +336,8 @@ def retrieve(
     - BM25：打分后按可见租户筛（IDF 是全局统计量，不能按租户重算）
     """
     name = strategy or DEFAULT_STRATEGY
+    if not 1 <= top_k <= 10:
+        raise ValueError("top_k 必须在 1 到 10 之间")
     fn = STRATEGIES.get(name)
     if fn is None:
         raise ValueError(f"未知策略：{name}，可选 {list(STRATEGIES)}")

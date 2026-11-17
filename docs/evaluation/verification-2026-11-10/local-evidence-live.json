@@ -1,0 +1,30 @@
+{
+  "provenance": {
+    "commit": "b4d9d5a0369849ded8fc6dcbc9523f7e4491c8b6",
+    "dirty": true,
+    "source_sha256": "d2cd91ef681e5028e78f6ec6d2df56dcef3ae341a0a2226677c45fca2f7f01e6"
+  },
+  "method": "function_calling",
+  "rows": [
+    {
+      "question": "签收后几天内可申请无理由退货？",
+      "expected": true,
+      "verdict": {
+        "sufficient": true,
+        "quote": "签收后7天内可申请无理由退货，商品须完好且不影响二次销售。",
+        "missing": ""
+      },
+      "passed": true
+    },
+    {
+      "question": "支持比特币付款吗？",
+      "expected": false,
+      "verdict": {
+        "sufficient": false,
+        "quote": "",
+        "missing": "知识库仅提供退货政策（签收后7天内无理由退货），未提及任何支付方式，缺少是否支持比特币付款的明确信息。"
+      },
+      "passed": true
+    }
+  ]
+}
