@@ -6,10 +6,10 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 import pytest
 
-import plan_eval
+from evaluation import plan_eval
 import plan_store
-from plan_eval import run_case
-from plan_recovery_eval import RECOVERY_CASES
+from evaluation.plan_eval import run_case
+from evaluation.plan_recovery_eval import RECOVERY_CASES
 from planning import refund_plan
 from test_task_http import task_api
 

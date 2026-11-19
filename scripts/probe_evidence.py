@@ -6,7 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import evidence
-from task_eval import provenance
+from evaluation.task_eval import provenance
 
 
 def main():

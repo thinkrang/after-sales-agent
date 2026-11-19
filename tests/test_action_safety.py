@@ -4,7 +4,7 @@ CI 里只跑确定性场景（不调模型），因为安全性质不该依赖�
 任何"危险动作被执行"都直接让构建失败——这类问题不能用"通过率"妥协。
 """
 
-import action_eval
+from evaluation import action_eval
 import json
 import subprocess
 from types import SimpleNamespace

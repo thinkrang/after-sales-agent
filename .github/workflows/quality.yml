@@ -24,12 +24,12 @@ jobs:
         run: |
           python -m py_compile \
             settings.py db.py auth.py orders.py tickets.py risk.py refund_service.py \
-            api.py rag.py tasks.py rebuild_index.py reconcile_refunds.py \
-            action_eval.py action_eval_model.py refund_tasks.py task_eval.py task_eval_model.py \
-            refund_flow.py session_guard.py task_scenarios.py agent_context.py agent_runtime.py long_memory.py \
-            tool_result.py prune_checkpoints.py evidence.py mcp_tools.py mcp_server.py \
-            planning.py plan_store.py orchestrator.py plan_eval.py plan_recovery_eval.py scripts/recover_plans.py \
-            voucher_api.py voucher_disputes.py voucher_policy.py mixed_voucher.py mixed_tools.py mixed_eval.py mixed_holdout_eval.py scripts/replay_voucher_policy.py \
+            api.py rag.py tasks.py rebuild_index.py scripts/reconcile_refunds.py \
+            evaluation/action_eval.py evaluation/action_eval_model.py refund_tasks.py evaluation/task_eval.py evaluation/task_eval_model.py \
+            refund_flow.py session_guard.py evaluation/task_scenarios.py agent_context.py agent_runtime.py long_memory.py customer_guidance.py \
+            tool_result.py scripts/prune_checkpoints.py evidence.py mcp_tools.py mcp_server.py \
+            planning.py plan_store.py orchestrator.py evaluation/plan_eval.py evaluation/plan_recovery_eval.py scripts/recover_plans.py \
+            voucher_api.py voucher_disputes.py voucher_policy.py mixed_voucher.py mixed_tools.py evaluation/mixed_eval.py evaluation/mixed_holdout_eval.py evaluation/mixed_reply_score.py scripts/replay_voucher_policy.py \
             scripts/run_voucher_demo.py scripts/mixed_demo.py
 
       # 这一组是安全与业务的核心回归：
@@ -50,7 +50,7 @@ jobs:
             tests/test_refund_workflow.py \
             tests/test_voucher_disputes.py \
             tests/test_voucher_policy_replay.py \
-            tests/test_refund_tasks.py \
+            tests/test_refund_tasks.py tests/test_refund_intake.py \
             tests/test_planning.py \
             tests/test_task_evaluation.py \
             tests/test_runtime_isolation.py \
@@ -72,17 +72,17 @@ jobs:
       # 单独跑一次脚本，把"危险动作误执行数"打在日志里。
       # 只靠 pytest 的红绿看不出具体是 0 还是 1，这个数字要可见。
       - name: Action-level safety report
-        run: python action_eval.py
+        run: python -m evaluation.action_eval
 
       - name: Task postcondition regression report
-        run: python task_eval.py --repeat 2 --output work/task-system.json
+        run: python -m evaluation.task_eval --repeat 2 --output work/task-system.json
 
       - name: Plan and replanning regression reports
         run: |
-          python plan_eval.py --repeat 1 --output work/plan-system.json
+          python -m evaluation.plan_eval --repeat 1 --output work/plan-system.json
           python scripts/compare_replanning.py --repeat 1 --output work/replan-comparison.json
           python scripts/replay_voucher_policy.py --output-dir work/voucher-replay
-          python mixed_eval.py --output work/mixed-agent/comparison.json
+          python -m evaluation.mixed_eval --output work/mixed-agent/comparison.json
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -125,4 +125,4 @@ jobs:
           langgraph-checkpoint==4.3.0 langchain-openai==1.7.2
           langgraph-checkpoint-sqlite==3.1.2 openai==3.35.1
       - name: Real HITL and SQLite task integration (scripted model)
-        run: python -X utf8 -m pytest tests/test_task_http.py tests/test_detached_tasks.py tests/test_plan_http.py tests/test_refund_flow.py tests/test_context_memory.py tests/test_agent_runtime.py tests/test_plan_recovery_eval.py tests/test_mixed_voucher.py tests/test_mixed_holdout_eval.py tests/test_mixed_demo.py
+        run: python -X utf8 -m pytest tests/test_task_http.py tests/test_detached_tasks.py tests/test_plan_http.py tests/test_refund_flow.py tests/test_context_memory.py tests/test_agent_runtime.py tests/test_plan_recovery_eval.py tests/test_mixed_voucher.py tests/test_mixed_holdout_eval.py tests/test_mixed_reply_score.py tests/test_mixed_demo.py tests/test_customer_guidance.py

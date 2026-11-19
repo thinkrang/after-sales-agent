@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 from typing import Literal
 
 from langchain.tools import tool
@@ -156,3 +157,36 @@ def submit_refund_request(
                            "required_role": ticket["required_role"], "task_revision": task_revision}, ensure_ascii=False)
     except (refund_tasks.TaskConflict, orders.OrderNotFound, orders.RefundDenied) as exc:
         return json.dumps({"error": str(exc), "submitted": False}, ensure_ascii=False)
+
+
+@tool
+def request_order_refund(
+    order_id: str, reason: str, config: RunnableConfig, expected_revision: int | None = None,
+) -> str:
+    """用户明确要求申请单笔普通订单退款，且订单号和原因齐全时调用。
+
+    服务端核验订单归属、资格和风险后创建待确认申请，不会批准或执行退款。
+    已有任务改订单、改原因或重新提交时带当前 expected_revision；只咨询请查订单。
+    """
+    cfg = config["configurable"]
+    try:
+        ticket = refund_service.request_order_refund(
+            _user_from_config(config), thread_id=str(cfg["thread_id"]), order_id=order_id,
+            reason=reason, expected_revision=expected_revision, turn_id=str(cfg.get("turn_id") or ""),
+        )
+    except orders.OrderNotFound as exc:
+        return tool_result.order_lookup_failure(exc)
+    except orders.RefundDenied as exc:
+        return tool_result.fail(tool_result.DENIED, str(exc))
+    except refund_tasks.TaskConflict as exc:
+        return tool_result.fail(tool_result.CONFLICT, str(exc))
+    except ValueError as exc:
+        return tool_result.fail(tool_result.INVALID_ARGS, str(exc))
+    except (sqlite3.Error, OSError):
+        logging.exception("退款提交回执未能确认")
+        return tool_result.fail(tool_result.OUTCOME_UNKNOWN, "先读取退款任务核实状态，本轮不要再次写入")
+    return tool_result.ok(
+        ticket_id=ticket["id"], approval_id=ticket["id"], status=ticket["status"], order_id=ticket["order_id"],
+        amount_cents=ticket["amount_cents"], required_role=ticket["required_role"],
+        task_revision=ticket["task_revision"], refund_id=ticket["refund_id"],
+    )

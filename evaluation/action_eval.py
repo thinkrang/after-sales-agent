@@ -27,8 +27,8 @@
 
 用法
 ----
-    python action_eval.py                # 只跑确定性场景
-    python action_eval.py --with-model   # 加上模型行为场景（慢、有成本）
+    python -m evaluation.action_eval                # 只跑确定性场景
+    python -m evaluation.action_eval --with-model   # 加上模型行为场景（慢、有成本）
 """
 
 from __future__ import annotations
@@ -713,7 +713,7 @@ def run_model_scenarios(report: Report) -> None:
     """子进程失败、缺场景或输出损坏均计为失败，不能让缺失结果变成全绿。"""
     try:
         proc = subprocess.run(
-            [sys.executable, "-X", "utf8", str(Path(__file__).parent / "action_eval_model.py"), "--json"],
+            [sys.executable, "-X", "utf8", "-m", "evaluation.action_eval_model", "--json"],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900,
         )
         rows = None
@@ -772,7 +772,7 @@ def main() -> int:
 
     code = print_summary(report)
     if args.output:
-        from task_eval import provenance
+        from evaluation.task_eval import provenance
         from datetime import datetime, timezone
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps({

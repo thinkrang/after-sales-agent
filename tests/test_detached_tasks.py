@@ -125,8 +125,8 @@ def test_pending_checkpoint_can_be_reconstructed_after_crash(detached_api):
 
 def test_real_evaluation_engine_can_run_natural_cancel(detached_api):
     from types import SimpleNamespace
-    from task_eval_model import run_case
-    from task_scenarios import cases
+    from evaluation.task_eval_model import run_case
+    from evaluation.task_scenarios import cases
     from langchain_core.messages import AIMessage
     api, client, sid, model = detached_api
     def call(name, args, key):
@@ -148,8 +148,8 @@ def test_real_evaluation_engine_can_run_natural_cancel(detached_api):
 
 def test_messages_baseline_uses_same_approval_service(detached_api):
     from types import SimpleNamespace
-    from task_eval_model import run_case, messages_baseline
-    from task_scenarios import cases
+    from evaluation.task_eval_model import run_case, messages_baseline
+    from evaluation.task_scenarios import cases
     from langchain_core.messages import AIMessage
     api, client, sid, model = detached_api
     api.app.state.llm = model
@@ -166,8 +166,8 @@ def test_messages_baseline_uses_same_approval_service(detached_api):
 
 def test_evaluator_accepts_correction_submitted_before_confirmation(detached_api):
     from types import SimpleNamespace
-    from task_eval_model import run_case
-    from task_scenarios import cases
+    from evaluation.task_eval_model import run_case
+    from evaluation.task_scenarios import cases
     from langchain_core.messages import AIMessage
     api, client, sid, model = detached_api
     def call(name, args, key):

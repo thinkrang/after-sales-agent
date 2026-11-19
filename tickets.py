@@ -24,6 +24,7 @@ import db
 import threading
 import uuid
 from datetime import datetime, timedelta
+from contextlib import nullcontext
 
 from settings import DATA_DIR, ensure_data_dir
 
@@ -297,6 +298,7 @@ def create_ticket(
     rule_version: str = "",
     task_revision: int | None = None,
     approval_protocol: str = "legacy",
+    _conn=None,
 ) -> dict:
     """Create one active ticket for an exact action payload.
 
@@ -308,8 +310,9 @@ def create_ticket(
     now = _now()
     requester_id = requester_id or operator
 
-    with _lock, db.session(DB_PATH) as conn:
-        conn.execute("BEGIN IMMEDIATE")
+    with (_lock if _conn is None else nullcontext()), (db.session(DB_PATH) if _conn is None else nullcontext(_conn)) as conn:
+        if _conn is None:
+            conn.execute("BEGIN IMMEDIATE")
         from refund_tasks import TaskConflict, guard_action, bind_ticket
         parent = conn.execute("""SELECT p.conversation_id FROM agent_plan_tasks b
             JOIN agent_plans p ON p.id=b.plan_id WHERE b.scope_thread_id=?
@@ -633,6 +636,7 @@ def count_recent_executed(
     tenant_id: str,
     requester_id: str,
     hours: int = 24,
+    _conn=None,
 ) -> int:
     """该用户近 N 小时内执行成功的退款笔数。
 
@@ -640,7 +644,7 @@ def count_recent_executed(
     的时间，比 created_at 更贴近"实际退款发生的时间"。
     """
     since = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
-    with _lock, db.session(DB_PATH) as conn:
+    with (_lock if _conn is None else nullcontext()), (db.session(DB_PATH) if _conn is None else nullcontext(_conn)) as conn:
         row = conn.execute(
             """
             SELECT COUNT(*) AS n FROM refund_tickets

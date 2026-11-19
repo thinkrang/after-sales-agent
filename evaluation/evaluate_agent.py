@@ -25,7 +25,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from api import _extract_text, app, remove_session_row
-from eval_dataset import agent_cases, multiturn_cases, stats
+from evaluation.eval_dataset import agent_cases, multiturn_cases, stats
 
 # 默认期望调用的工具
 DEFAULT_TOOLS = {"search_shop_info"}

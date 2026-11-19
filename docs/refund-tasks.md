@@ -46,7 +46,7 @@ SSE interrupt 只表示存在待审批卡片，不表示新对话图不可继续
 ### 确定性业务回归
 
 ```bash
-python task_eval.py --repeat 3 --output work/task-system.json
+python -m evaluation.task_eval --repeat 3 --output work/task-system.json
 ```
 
 8 个场景检查补槽、咨询、改订单、改原因、撤回、批准后不可改、下游成功但响应丢失、
@@ -60,8 +60,8 @@ python task_eval.py --repeat 3 --output work/task-system.json
 ### 真实模型多轮任务
 
 ```bash
-python task_eval.py --mode model --variant structured --split dev --repeat 3 --output work/structured-dev.json
-python task_eval.py --mode model --variant structured --split holdout --repeat 3 --output work/structured-holdout.json
+python -m evaluation.task_eval --mode model --variant structured --split dev --repeat 3 --output work/structured-dev.json
+python -m evaluation.task_eval --mode model --variant structured --split holdout --repeat 3 --output work/structured-holdout.json
 ```
 
 需要完整 requirements、可用 embedding/知识索引和有效 DEEPSEEK_API_KEY，会产生 API 费用。
@@ -81,8 +81,8 @@ python task_eval.py --mode model --variant structured --split holdout --repeat 3
 ### 对照实验
 
 ```bash
-python task_eval.py --mode model --variant messages --split dev --repeat 3 --output work/messages-dev.json
-python task_eval.py --mode model --variant structured --split dev --repeat 3 --baseline work/messages-dev.json --output work/paired-dev.json
+python -m evaluation.task_eval --mode model --variant messages --split dev --repeat 3 --output work/messages-dev.json
+python -m evaluation.task_eval --mode model --variant structured --split dev --repeat 3 --baseline work/messages-dev.json --output work/paired-dev.json
 ```
 
 messages 变体保留同一远程模型、对话 checkpoint、订单查询、检索、待审批撤回工具、

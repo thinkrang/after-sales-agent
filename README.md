@@ -22,7 +22,7 @@ python scripts/run_voucher_demo.py --mixed
 
 ```bash
 python -m pip install "fastapi==0.147.0" "pydantic==2.13.5" "python-dotenv==1.2.3"
-python plan_eval.py --cases dual --output work/planning/demo.json
+python -m evaluation.plan_eval --cases dual --output work/planning/demo.json
 ```
 
 **团购券争议**可在 [本机演示入口](http://127.0.0.1:8765/) 切换消费者与主管身份，体验提交 V200、补传商家流水和刷新后复核。下方的规则回放命令仅需 Python 标准库。完整步骤见 [团购券核销争议](docs/voucher-disputes.md#离线浏览器演示)。
@@ -46,13 +46,15 @@ python -m pytest tests/test_agent_runtime.py -q -o junit_logging=log --junitxml=
 
 | 验证 | 结果与条件 |
 | --- | --- |
-| 本地隔离回归 | 363 项通过、1 项跳过、2 项未选中。使用临时 SQLite、独立上传目录和新知识索引 |
+| 本地隔离回归 | 385 项通过、1 项跳过、2 个真实模型用例按标记排除。使用临时 SQLite、独立上传目录和新知识索引 |
 | 局部重规划 | 仅修改待审批订单的退款原因时，实际调度步数由 3 步降为 1 步。更换订单时两种策略均为 3 步。每个场景每种策略各运行 10 次 |
 | 故障注入 | 12 项用例通过，覆盖写入丢回执、模型空响应、无效工具调用、SSE 收尾和 HTTP 超时传递 |
 | 核销规则回放 | 相同 18 份合成快照上，收紧时间容差后，误确认由 2/18 降至 0/18，漏确认由 1/18 增至 3/18 |
 | 混合任务配对 | 12 次隔离运行。核销记录一致时，按观察路由省 1 次补问；商家补传后省 1 次无关退款读取，冲突场景多 1 次券观察 |
 | 混合任务留出评测 | 8 个冻结的合成场景、13 轮。DeepSeek 的业务判分为 6/8，人工复核发现 5 轮状态或证据错误。审批前退款为 0 |
 | 工具契约回归 | 修复到店资料、撤回结果和证据版本的返回语义后，原 8 个场景复跑通过 8/8、13/13 轮，审批前退款为 0 |
+| 新对话答复盲测 | 10 个新场景中，业务判分通过 9 个，回复判分通过 7 个。通过盲审发现了多报主管审批、券退款指引混用等问题。 [协议与明细](docs/mixed-reply-evaluation.md) |
+| 单笔退款提交与页面指引 | 服务端在一次事务内登记任务并创建审批。DeepSeek 回归中 A400 成功建单并撤回，v2 整体业务 7/10。首次运行的 5 个新场景中业务通过 4 个，服务端指引条件符合 20/20。 [失败明细与复现](docs/mixed-reply-evaluation.md#单笔提交与页面指引回归) |
 | DeepSeek 恢复配对 | 两个合成场景各三轮。固定图 5/6，模型规划 6/6。两组都通过的配对中，固定图的总 Token 在回执丢失、改口场景分别少 15.4% 和 10.9% |
 
 配对评测使用合成对话和模拟网关，运行于增加模型空响应恢复之前。固定图有一次在建单前返回空消息，故障未触发，计入端到端失败。查看 [真实模型配对明细](docs/agent-recovery-evaluation.md) · [任务规划与编排](docs/agent-planning.md) · [重规划对照数据](docs/refund-recovery-verification.md) · [核销规则逐案回放](docs/evaluation/voucher-policy-replay-2026-11-17.md) · [安全边界](SECURITY.md)。
@@ -145,7 +147,7 @@ Agent 在工具超时后可按操作类型恢复。只读查询允许有限重�
 修改后旧工单先在数据库失效，再关闭独立执行图；会话不再悬空等待工具结果。
 任务进度与修改时间线可在聊天顶部查看。
 
-`task_eval.py` 分开报告确定性业务回归与真实模型任务评测。判定基于工单终态、
+`evaluation/task_eval.py` 分开报告确定性业务回归与真实模型任务评测。判定基于工单终态、
 订单/原因、实际退款次数和会话是否正常收尾，不把回答命中关键词等同于退款办结。
 运行方法和边界见 [任务状态与评测说明](docs/refund-tasks.md)。
 
@@ -411,7 +413,7 @@ agent 的 `search_shop_info` 是 `top_k=3`——3 篇文档全文进证据核查
 
 | 路径 | 实现 | 谁在用 | 租户过滤 | 策略 |
 |---|---|---|---|---|
-| A（旧） | `retrieval.STRATEGIES` | `evaluate_rag.py`、`tune_rrf.py` | ❌ 无 | 向量 / BM25 / RRF 可选 |
+| A（旧） | `retrieval.STRATEGIES` | `evaluation/evaluate_rag.py`、`evaluation/tune_rrf.py` | ❌ 无 | 向量 / BM25 / RRF 可选 |
 | B（旧） | `rag.debug_retrieval()` | 线上 `search_shop_info` | ✅ 有 | 只有纯向量，top_k=3 |
 
 **评测测的是 A，用户走的是 B。** 所以按评测调出来的权重对线上毫无影响——
@@ -483,7 +485,7 @@ tune_rrf ──────────┘         ├─ vector  → rag.debug_
 ### 动作级评测：报告安全指标，不报告问答准确率
 
 92 条问答集衡量"答得对不对"，但答不了"会不会错误执行"。所以另有一套
-动作级评测（`action_eval.py`），报告的是：
+动作级评测（`evaluation/action_eval.py`），报告的是：
 
 | 指标 | 结果 |
 |---|---|
@@ -505,8 +507,8 @@ tune_rrf ──────────┘         ├─ vector  → rag.debug_
 所以那 36 条直接调服务层，快、稳、结论硬，每次提交都跑（`tests/test_action_safety.py`）。
 
 ```bash
-python action_eval.py                # 确定性场景，约 10 秒
-python action_eval.py --with-model   # 加上模型行为场景，约 1.5 分钟
+python -m evaluation.action_eval                # 确定性场景，约 10 秒
+python -m evaluation.action_eval --with-model   # 加上模型行为场景，约 1.5 分钟
 ```
 
 
@@ -521,17 +523,17 @@ python action_eval.py --with-model   # 加上模型行为场景，约 1.5 分钟
 复现：
 
 ```bash
-python evaluate_rag.py            # 检索策略对比
-python evaluate_answerability.py  # 证据核查二分类
-python evaluate_agent.py          # 问答回归（关键词口径）
-python task_eval.py --mode model --split dev --repeat 3 --output work/structured.json
-python tune_rrf.py                # RRF 权重扫描（仅用非 hold-out）
+python -m evaluation.evaluate_rag            # 检索策略对比
+python -m evaluation.evaluate_answerability  # 证据核查二分类
+python -m evaluation.evaluate_agent          # 问答回归（关键词口径）
+python -m evaluation.task_eval --mode model --split dev --repeat 3 --output work/structured.json
+python -m evaluation.tune_rrf                # RRF 权重扫描（仅用非 hold-out）
 ```
 
 如果进程在用户批准后、退款结果写回前退出，可以重复执行对账：
 
 ```bash
-python reconcile_refunds.py
+python -m scripts.reconcile_refunds
 ```
 
 对账会复用原审批载荷和工单 ID 作为幂等键，不会生成第二笔退款。
@@ -591,7 +593,7 @@ agent 只读前 3 篇，所以按 R@3 选。
 **这个 tradeoff 是自觉的**：Hit@1 从 82.05% 降到 80.77%（-1.28 点），
 换 R@3 从 92.31% 涨到 96.15%（+3.85 点）。用「排序更好看」换「更不容易漏」。
 
-> 顺带修了 `tune_rrf.py` 的一个输出问题：它原来只按 MRR 选"最优"，
+> 顺带修了 `evaluation/tune_rrf.py` 的一个输出问题：它原来只按 MRR 选"最优"，
 > 却把 Hit@1 一起打印，看起来像"MRR 最优的配置 Hit@1 也最好"——实际可能更差。
 > 现在三个指标各自的最优分开列，并说明该看哪个。
 
@@ -715,10 +717,10 @@ An assistant message with 'tool_calls' must be followed by tool messages
 
 ## 性能
 
-`perf.py` 在关键路径埋点，`perf_report.py` 跑一批请求输出分阶段分布：
+`perf.py` 在关键路径埋点，`evaluation/perf_report.py` 跑一批请求输出分阶段分布：
 
 ```bash
-python perf_report.py 8 3      # 8 次检索 + 3 次完整对话
+python -m evaluation.perf_report 8 3      # 8 次检索 + 3 次完整对话
 ```
 
 实测结果（单机，DeepSeek API）：
@@ -761,7 +763,7 @@ filter={"tenant": {"$in": [user_tenant, "public"]}}
 
 代价是候选池变小，召回数量可能不足，所以 `k` 要适当放大。这一点在测试里专门守着（`test_tenant_does_not_starve_public_docs`）。
 
-**还有个坑**：`where` 只匹配"字段存在且值符合"的文档，**没有 `tenant` 字段的存量数据会被静默排除**。所以上线前必须跑 `migrate_tenant.py` 补字段，否则用户会突然发现自己连商品价格都查不到——而且是静默失败，极难排查。
+**还有个坑**：`where` 只匹配"字段存在且值符合"的文档，**没有 `tenant` 字段的存量数据会被静默排除**。所以上线前必须跑 `scripts/migrate_tenant.py` 补字段，否则用户会突然发现自己连商品价格都查不到——而且是静默失败，极难排查。
 
 ### 10. 工单状态机用数据库约束表达业务规则
 
@@ -823,85 +825,67 @@ SSE `interrupt` 表示存在待审批申请，前端弹出卡片并调用 `/chat
 
 ## 项目结构
 
-```
-api.py                  FastAPI 应用、会话管理、SSE、审批接口
-auth.py                 密码哈希、Bearer token、服务端租户与角色
-orders.py               订单归属、退款资格、幂等退款网关
-refund_service.py       审批绑定、原子抢占、执行与对账
-refund_flow.py          独立持久化审批/执行图，不阻塞对话
-refund_tasks.py         任务版本、下一步建议、变更审计
-planning.py             结构化计划与依赖校验
-plan_store.py           计划与步骤持久化、抢占和执行记录
-orchestrator.py         调度、局部重规划与恢复
-session_guard.py        单会话并发控制（不是全局 LLM 锁）
-task_scenarios.py       12 个合成多轮业务任务（dev/holdout 分开）
-task_eval.py            分层报告、重复运行、场景指纹、配对对照
-task_eval_model.py      真模型任务回放与业务终态验收
-reconcile_refunds.py    对账批处理：恢复已批准/执行中的退款工单
-prune_checkpoints.py    会话历史清理：按空闲天数删 checkpoint（默认预览，--apply 才写库）
-agent_context.py        逐轮循环边界、工具重试、任务快照注入
-agent_runtime.py        剩余时间预算、I/O 错误分类与运行轨迹
-long_memory.py          类型化偏好（可过期/删除）与只读售后历史
-evidence.py             证据核查（结构化输出，不依赖检索栈）
-mcp_server.py           MCP 协议层：5 个工具、Bearer 鉴权、HTTP/stdio 传输
-mcp_tools.py            MCP 工具实现：租户从 token 解析，写操作只建待审批
-rag.py                  索引构建、文档增删、检索、证据格式化、多租户过滤
-retrieval.py            四种检索策略（vector / bm25 / hybrid / rerank）
-                        唯一检索入口：线上 agent 和评测脚本都走 retrieve()
-                        租户过滤在策略内部完成
-test_answerability.py   证据核查（verify_evidence）
-celery_app.py           Celery 配置（broker / backend / 重试策略）
-tasks.py                索引任务、任务派发、降级与状态查询
-tickets.py              工单状态机与持久化（部分唯一索引保证幂等）
-skills/                 Skill 机制（registry.py + 三个技能目录）
-db.py                   SQLite 连接工厂（WAL / busy_timeout / 连接不泄漏）
-migrate_tenant.py       给存量向量块补 tenant 元数据
-perf.py                 分阶段耗时采样（P50/P95）
-perf_report.py          性能报告与瓶颈判断
-eval_dataset.py         92 条评测集（单轮 80 + 多轮 12，单一数据源）
-action_eval.py          44 条动作轨迹场景（安全指标，不是准确率）
-action_eval_model.py    8 条模型行为场景（独立进程，需真实模型）
-risk.py                 退款风险分级规则（纯函数，带版本号）
-evaluate_rag.py         检索策略对比
-evaluate_answerability.py  证据核查二分类
-evaluate_agent.py       问答回归通过率（非退款办结率）
-tune_rrf.py             RRF 权重扫描
-rebuild_index.py        保留上传文档的重建索引
-seed_distractors.py     生成干扰文档
-download_reranker.py    下载 Reranker 模型
-index.html              聊天界面（浅色 / 深色，支持 ?theme= 与 ?new=1）
-knowledge.html          知识库管理界面
-voucher_center.html     消费者核销核查与主管争议复核
-voucher_api.py          核销争议 API 与商家证据入口
-voucher_disputes.py     核销证据、争议状态与复核版本
-voucher_policy.py       团购券适用规则
-knowledge/              152 篇语料（150 篇公共 + 2 篇租户专属）
-docs/screenshots/       README 用的界面截图
+从根目录的 `api.py` 阅读 HTTP 入口，按业务模块跟进调用。评测统一使用 `python -m evaluation.模块名`，维护脚本使用 `python -m scripts.模块名`。在项目根目录执行命令。
 
-tests/                  pytest 用例（协议、租户、退款状态机、安全与并发）
-  test_single_retrieval_path.py  静态检查：检索只有一条路径（AST，零依赖）
-  test_sessions.py        会话 CRUD 与会话隔离
-  test_knowledge.py       异步索引、去重、超限
-  test_retrieval.py       检索策略与索引完整性
-  test_chat_sse.py        SSE 协议与审批流程（FakeAgent）
-  test_auth.py            token、租户边界与会话所有权
-  test_refund_workflow.py 审批绑定、幂等执行与崩溃恢复
-  test_tenant.py          多租户权限过滤
-  test_tickets.py         工单状态机
-  test_skills.py          Skill 扫描、解析、渐进加载
-  test_concurrency.py     连接层 + 串行化回归
-  test_eval_dataset.py    评测集分组 + 多轮回放逻辑
-  test_risk.py            风险分级规则（边界、组合、确定性）
-  test_action_safety.py   动作级评测接入 CI（危险动作即失败）
-  test_agent_runtime.py   执行层故障注入、回放与 HTTP 超时传递
-  test_hitl_http.py       真实模型端到端（标记 llm，默认跳过）
-
-conftest.py             pytest 夹具（含 FakeAgent、工单库隔离）
-pytest.ini              pytest 配置（默认跳过 llm 标记）
-scripts/probe_hitl.py   验证 interrupt 机制的最小实验
-scripts/bench_concurrency.py  并发压测（对比锁的影响）
-Dockerfile / docker-compose.yml / requirements.txt
+```text
+api.py                    FastAPI 启动入口、聊天流式输出、会话和审批接口
+mixed_tools.py            对话 Agent 的业务工具
+agent_context.py          Agent 循环边界、工具重试、上下文注入
+agent_runtime.py          时间预算、故障分类和调用轨迹
+planning.py               结构化计划、工具白名单与依赖校验
+plan_store.py             计划、任务、步骤及执行租约
+orchestrator.py           依赖调度、局部重规划和恢复
+refund_tasks.py           单笔退款任务、版本和修改审计
+refund_service.py         资格核验、建单、审批绑定、执行与对账
+refund_flow.py            独立持久化审批与执行图
+tickets.py                退款工单状态机与幂等约束
+orders.py / risk.py        订单归属、退款网关和风险分级
+mixed_voucher.py           券分支观察、决策和证据版本
+voucher_*.py              核销政策、争议业务和 API
+customer_guidance.py      从业务状态生成页面下一步指引
+rag.py / retrieval.py      知识索引和统一检索入口
+evidence.py               结构化证据核查
+auth.py / db.py            登录权限与数据库连接
+session_guard.py          会话并发控制
+long_memory.py            偏好与售后历史
+mcp_server.py / mcp_tools.py  MCP 服务入口与业务工具
+celery_app.py / tasks.py   索引异步任务与降级
+settings.py / perf.py      路径配置和性能采样
+rebuild_index.py           重建知识索引的入口
+index.html                Agent 聊天页面
+knowledge.html            知识库管理页面
+voucher_center.html       消费者核查与主管复核页面
+static/                   页面图标等静态资源
+skills/                   按需加载的业务流程
+knowledge/                店铺知识语料
+evaluation/               评测数据、回放、判分和性能报告
+  action_eval.py          确定性动作安全场景
+  task_eval.py            单任务回归和真实模型评测
+  plan_eval.py            计划编排与故障恢复评测
+  mixed_holdout_eval.py   混合任务冻结场景回放
+  mixed_reply_score.py    回复盲审包与逐项评分
+  evaluate_*.py           检索、问答和可答性评测
+  tune_rrf.py             检索权重扫描
+scripts/                  演示、核验、维护与迁移
+  verify_project.py      隔离数据目录的一键核验
+  reconcile_refunds.py   恢复待执行或执行中的退款
+  prune_checkpoints.py   会话历史清理（默认预览）
+  recover_plans.py       恢复可运行的计划步骤
+tests/                    自动化测试
+docs/                     设计说明与历史评测报告
+work/                     本地验收产物与临时文件（不提交）
 ```
+
+常用命令
+
+```powershell
+python -m uvicorn api:app --host 127.0.0.1 --port 8000
+python -m evaluation.action_eval
+python -m evaluation.task_eval --repeat 3 --output work/task-system.json
+python scripts/verify_project.py --output work/verification
+python -m scripts.prune_checkpoints --days 30
+```
+
 
 ---
 
@@ -913,8 +897,8 @@ Dockerfile / docker-compose.yml / requirements.txt
 - **旧问答回归 100% 是天花板问题**。题目与文档边界清晰，难负例的"缺失信息"都是文档里完全没出现过的概念，拒答偏容易。想做出区分度需要"边界可答性"题或"文档冲突"题。
 - **检索是向量 + BM25 混合召回（0.6 : 0.4）**。这个配置只在当前语料上验证过：
   152 篇里有一批结构高度相似的 SKU，BM25 的精确匹配正好补上向量的短板。
-  换到以口语化提问为主的语料，权重需要重跑 `tune_rrf.py`。Reranker 因网络原因未接入
-  （`download_reranker.py` 可补齐）。
+  换到以口语化提问为主的语料，权重需要重跑 `evaluation/tune_rrf.py`。Reranker 因网络原因未接入
+  （`scripts/download_reranker.py` 可补齐）。
 - **写操作仍是串行**。全局锁已拆除，读和 LLM 调用可以并发；但 SQLite 只允许一个写者，高并发写入仍需换 PostgreSQL。这是单机 SQLite 的固有限制，不是实现问题。
 - **退款下游是本地模拟网关**。订单与执行记录已落 SQLite，并通过幂等键模拟真实退款接口；生产接入支付/ERP 时仍需要签名验证、对账窗口和人工补偿流程。
 - **认证是演示级身份库**。密码哈希、签名 token 和服务端授权边界已经存在，但生产环境应替换为公司 IdP/OIDC，并由密钥管理系统托管 `AUTH_SECRET`。

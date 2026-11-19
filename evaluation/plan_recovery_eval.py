@@ -69,7 +69,7 @@ def receipt_fault(create_name, ticket_rows, injections):
 
 
 def score(case_id, trace, rows, injections):
-    from task_eval_model import reason_matches
+    from evaluation.task_eval_model import reason_matches
 
     if case_id == "lost_receipt":
         if len(injections) != 1:

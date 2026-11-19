@@ -1,10 +1,10 @@
 """Prune conversation checkpoints for sessions that have been idle for N days.
 
 Usage:
-    python prune_checkpoints.py                     # dry run, 30 days
-    python prune_checkpoints.py --days 7 --apply
-    python prune_checkpoints.py --orphans --apply   # also threads with no session row
-    python prune_checkpoints.py --apply --vacuum
+    python -m scripts.prune_checkpoints                     # dry run, 30 days
+    python -m scripts.prune_checkpoints --days 7 --apply
+    python -m scripts.prune_checkpoints --orphans --apply   # also threads with no session row
+    python -m scripts.prune_checkpoints --apply --vacuum
 
 只删会话历史，不删业务事实
 --------------------------

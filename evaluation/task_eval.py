@@ -1,7 +1,7 @@
 """Refund task evaluation with database postconditions (no LLM by default).
 
-python task_eval.py --repeat 3 --output work/task-system.json
-python task_eval.py --mode model --repeat 3 --output work/task-model.json
+python -m evaluation.task_eval --repeat 3 --output work/task-system.json
+python -m evaluation.task_eval --mode model --repeat 3 --output work/task-model.json
 """
 from __future__ import annotations
 
@@ -173,7 +173,7 @@ def run_system(repeat=1) -> list[dict]:
 
 
 def summary(rows, mode):
-    from task_scenarios import VERSION, fingerprint
+    from evaluation.task_scenarios import VERSION, fingerprint
     durations = sorted(r["elapsed_ms"] for r in rows)
     groups = {}
     for row in rows:
@@ -228,9 +228,9 @@ def compare(report, baseline):
 def provenance():
     import hashlib
     import subprocess
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     digest = hashlib.sha256()
-    sources = list(root.glob("*.py")) + list((root/"skills").rglob("*.py")) + list((root/"skills").rglob("*.md")) + [root/"requirements.txt"]
+    sources = list(root.glob("*.py")) + list((root/"evaluation").rglob("*.py")) + list((root/"scripts").rglob("*.py")) + list((root/"skills").rglob("*.py")) + list((root/"skills").rglob("*.md")) + [root/"requirements.txt"]
     for path in sorted(sources):
         digest.update(path.relative_to(root).as_posix().encode() + path.read_bytes())
     def git(*args):
@@ -258,7 +258,7 @@ def main():
     if args.max_model_calls < 1:
         parser.error("--max-model-calls 必须大于 0")
     if args.mode == "model":
-        from task_eval_model import run_model
+        from evaluation.task_eval_model import run_model
         run_provenance = provenance()
         def progress(rows):
             if args.output:

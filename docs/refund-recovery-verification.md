@@ -47,17 +47,17 @@ Web 与 MCP 只把通过校验的引用交给回答端。定向测试覆盖引�
 ```bash
 # 双订单演示，使用轻量依赖
 python -m pip install "fastapi==0.147.0" "pydantic==2.13.5" "python-dotenv==1.2.3"
-python plan_eval.py --cases dual --output work/planning/demo.json
+python -m evaluation.plan_eval --cases dual --output work/planning/demo.json
 
 # SQLite 终态与重规划步数
-python plan_eval.py --repeat 3 --output work/planning/system.json
+python -m evaluation.plan_eval --repeat 3 --output work/planning/system.json
 python scripts/compare_replanning.py --repeat 10 --output work/planning/replanning.json
 
 # 完整隔离验收
 python scripts/verify_project.py --output work/verification
 
 # 真实模型配对试跑，会使用 API 额度
-python plan_eval.py --with-model --variant both --cases dual --output work/planning/model-pilot.json
+python -m evaluation.plan_eval --with-model --variant both --cases dual --output work/planning/model-pilot.json
 ```
 
 已用没有 `.env` 的临时源码目录和只安装上述轻量依赖的新 Python 虚拟环境运行双订单演示，

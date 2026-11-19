@@ -10,9 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import eval_dataset as ds
-
-
+from evaluation import eval_dataset as ds
 # ---------------------------------------------------------------- 数据集分组
 
 
@@ -119,7 +117,7 @@ def test_run_one_replays_history_in_order():
     这是多轮评测的核心：如果偷懒把历史拼成一条消息，agent 从没回应过
     前几轮，就测不出 checkpointer 是否真的在累积状态。
     """
-    from evaluate_agent import run_one
+    from evaluation.evaluate_agent import run_one
 
     case = {
         "id": "X1", "type": "coreference",
@@ -137,7 +135,7 @@ def test_run_one_replays_history_in_order():
 
 
 def test_run_one_single_turn_makes_one_call():
-    from evaluate_agent import run_one
+    from evaluation.evaluate_agent import run_one
 
     case = {
         "id": "X2", "type": "easy", "question": "单轮问题",
@@ -155,7 +153,7 @@ def test_run_one_collects_tools_across_turns():
     最后一句"那这个多少钱"完全可以直接用上一轮检索到的结果回答，
     不该因为没有新的工具调用就判错。
     """
-    from evaluate_agent import run_one
+    from evaluation.evaluate_agent import run_one
 
     class ToolAgent(RecordingAgent):
         def invoke(self, payload, config=None, **kwargs):

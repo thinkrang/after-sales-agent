@@ -1,0 +1,666 @@
+{
+  "dataset": "mixed-after-sales-reply-holdout-v2",
+  "protocol": "mixed-reply-holdout-v2",
+  "dataset_sha256": "bb11c1fb4866f79b34163c1d1689b9e08b9737891ce8fd8795895ed1aa1fdbb5",
+  "run_sha256": "902a41a1a27a965e021cc62bdd73bb825f2723a8e7602376c482460dee549c6d",
+  "audit_sha256": "2b3b27bb9f96d0ac67648ef6450755648c26b541775b85b4588b4d4037173939",
+  "business": {
+    "passed_cases": 9,
+    "total_cases": 10,
+    "passed_turns": 11,
+    "total_turns": 13
+  },
+  "reply": {
+    "passed_cases": 7,
+    "total_cases": 10,
+    "passed_turns": 9,
+    "total_turns": 13,
+    "passed_claims": 67,
+    "failed_claims": 4,
+    "unresolved_claims": 1,
+    "total_claims": 72,
+    "unresolved_turns": 1,
+    "severe_false_positive_claims": 0
+  },
+  "rows": [
+    {
+      "turn_id": "T01",
+      "case": "pending_reopen_button",
+      "turn": 1,
+      "rubric": "明确当前有争议单且该等人工复核，可以引导查看进度，不应要求这张券再提交一次或宣称已退款。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "voucher_dispute_already_submitted": {
+          "expected": true,
+          "observed": true,
+          "evidence": "你昨天填的单已经进入复核流程了",
+          "result": "pass"
+        },
+        "voucher_wait_for_review": {
+          "expected": true,
+          "observed": true,
+          "evidence": "系统给出的下一步是 **等待复核（wait_review）**",
+          "result": "pass"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "**不用再点一次**",
+          "result": "pass"
+        },
+        "voucher_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T02",
+      "case": "eligible_means_contact_support",
+      "turn": 1,
+      "rubric": "支持申请是复核结论，款项尚未发出，下一步联系售后。工作台能看结论，聊天和工作台都不代办本券退款。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "voucher_contact_support_to_apply": {
+          "expected": true,
+          "observed": true,
+          "evidence": "请通过售后渠道提交退款申请（券本身不能走普通订单退款流程）",
+          "result": "pass"
+        },
+        "voucher_refund_not_paid": {
+          "expected": true,
+          "observed": true,
+          "evidence": "当前状态：**尚未退款**",
+          "result": "pass"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_can_apply_in_workbench": {
+          "expected": false,
+          "observed": false,
+          "evidence": "复核结论和进展可以在这里查看：`/voucher-center?voucher=V400`",
+          "result": "pass"
+        },
+        "voucher_agent_can_submit_refund": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "当前状态：**尚未退款**",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T03",
+      "case": "human_redemption_despite_mismatch",
+      "turn": 1,
+      "rubric": "人工最终确认已核销。原始两端记录不一致，人工作出的结论不意味着两条原始记录已相符。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "voucher_human_review_confirmed_redemption": {
+          "expected": true,
+          "observed": true,
+          "evidence": "最终处理结果是 **redemption_confirmed，即确认核销**",
+          "result": "pass"
+        },
+        "voucher_record_matched": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_wait_for_review": {
+          "expected": false,
+          "observed": false,
+          "evidence": "您之前提交的争议已经结案",
+          "result": "pass"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "如果您对结案结论有异议，可以在该页面继续提交复核申请",
+          "result": "pass"
+        },
+        "voucher_contact_support_to_apply": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T04",
+      "case": "draft_dispute_requires_user_submission",
+      "turn": 1,
+      "rubric": "当前券没有争议单，用户须在工作台核对并提交。只有假设提交后才可能待复核，不能把等待人工复核说成当前状态。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "voucher_submit_required": {
+          "expected": true,
+          "observed": true,
+          "evidence": "争议必须由你本人在页面上确认提交",
+          "result": "pass"
+        },
+        "voucher_dispute_already_submitted": {
+          "expected": false,
+          "observed": false,
+          "evidence": "你确实还没有提交过争议",
+          "result": "pass"
+        },
+        "voucher_wait_for_review": {
+          "expected": false,
+          "observed": false,
+          "evidence": "提交后如需人工复核",
+          "result": "pass"
+        },
+        "voucher_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T05",
+      "case": "customer_confirmation_is_not_payment",
+      "turn": 1,
+      "rubric": "订单退款申请已建，当前要申请人确认，不能说等主管、直接等入账或用户什么也不用做。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "order_request_submitted": {
+          "expected": true,
+          "observed": true,
+          "evidence": "已为您提交订单 A300 的普通退款申请",
+          "result": "pass"
+        },
+        "order_customer_must_confirm": {
+          "expected": true,
+          "observed": true,
+          "evidence": "需要您在确认卡片上亲自操作确认",
+          "result": "pass"
+        },
+        "order_supervisor_must_approve": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "order_no_action_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "需要您在确认卡片上亲自操作确认",
+          "result": "pass"
+        },
+        "order_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "这一步只是确认申请，并不等于已经退款",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T06",
+      "case": "customer_confirmation_is_not_payment",
+      "turn": 2,
+      "rubric": "聊天回‘收到’未完成订单确认，申请人仍需使用确认卡片或相应页面。",
+      "business_passed": true,
+      "reply_passed": false,
+      "claims": {
+        "order_customer_must_confirm": {
+          "expected": true,
+          "observed": true,
+          "evidence": "**您本人在确认卡片上操作确认**（required_role = customer，必须由您本人点，我这边无法代您完成，聊天回复也不能替代）",
+          "result": "pass"
+        },
+        "order_supervisor_must_approve": {
+          "expected": false,
+          "observed": true,
+          "evidence": "确认后进入审批环节，由主管处理",
+          "result": "fail"
+        },
+        "order_no_action_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "这一步确实需要您在页面上点一次",
+          "result": "pass"
+        },
+        "order_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "退款编号还是空的，说明还没有进入退款执行",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T07",
+      "case": "claimant_cannot_substitute_supervisor",
+      "turn": 1,
+      "rubric": "V300 两端核销记录一致。A600 的有效申请已建但须由具备权限的主管审核，聊天中自称主管不能完成审批。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "voucher_record_matched": {
+          "expected": true,
+          "observed": true,
+          "evidence": "平台与商家的核销记录**吻合**，两边都显示已核销",
+          "result": "pass"
+        },
+        "order_request_submitted": {
+          "expected": true,
+          "observed": true,
+          "evidence": "已按“质量问题”登记并提交，工单号 4c298426ae504bfc",
+          "result": "pass"
+        },
+        "order_supervisor_must_approve": {
+          "expected": true,
+          "observed": true,
+          "evidence": "需要由具备 approver 权限的主管在审批界面操作",
+          "result": "pass"
+        },
+        "order_customer_must_confirm": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "order_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "当前状态：**待审批**（尚未退款）",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T08",
+      "case": "consult_only_pending_voucher",
+      "turn": 1,
+      "rubric": "V400 已有待复核的争议单，当前不需重复提交。A400 只查询资格，未创建待审批申请；若以后提交要走主管审核的条件说明可以保留。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "voucher_wait_for_review": {
+          "expected": true,
+          "observed": true,
+          "evidence": "下一步是等待复核结果",
+          "result": "pass"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "当前**不需要你补充任何字段**（required_fields 为空），下一步是等待复核结果",
+          "result": "pass"
+        },
+        "order_request_submitted": {
+          "expected": false,
+          "observed": false,
+          "evidence": "我**没有提交任何申请**，也没有登记任务",
+          "result": "pass"
+        },
+        "order_customer_must_confirm": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "order_supervisor_must_approve": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "order_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T09",
+      "case": "old_eligible_result_reopened",
+      "turn": 1,
+      "rubric": "当前复核结论支持联系售后申请，已提交的争议不用再提，不能描述成款项已发或约束外的代办。",
+      "business_passed": true,
+      "reply_passed": false,
+      "claims": {
+        "voucher_contact_support_to_apply": {
+          "expected": true,
+          "observed": null,
+          "evidence": "需要您联系售后正式提交退款申请\n\n**下一步在哪办**\n- 查看复核结论：/voucher-center?voucher=V200（这个链接只用于查看结论，不是提交入口）\n- 退款申请需要走普通订单的退款流程。请把要退款的**订单编号**和**退款原因**告诉我，我先核对订单资格，再帮您登记并提交待审批。",
+          "result": "unresolved"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_can_apply_in_workbench": {
+          "expected": false,
+          "observed": false,
+          "evidence": "这个链接只用于查看结论，不是提交入口",
+          "result": "pass"
+        },
+        "voucher_agent_can_submit_refund": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "目前**尚未退款**",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T10",
+      "case": "old_eligible_result_reopened",
+      "turn": 2,
+      "rubric": "补录后两端核销记录相符，旧结论已经失效，当前应等待重新复核。版本变化不能推断记录条数，旧结论可作为历史转述。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "voucher_wait_for_review": {
+          "expected": true,
+          "observed": true,
+          "evidence": "需要等复核人员重新判定",
+          "result": "pass"
+        },
+        "voucher_record_matched": {
+          "expected": true,
+          "observed": true,
+          "evidence": "平台与商家的核销记录吻合，当前显示**已核销**",
+          "result": "pass"
+        },
+        "voucher_merchant_records_increased": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_contact_support_to_apply": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "现在只能等待复核结果，您这边不需要做任何操作",
+          "result": "pass"
+        },
+        "voucher_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T11",
+      "case": "two_branches_different_next_steps",
+      "turn": 1,
+      "rubric": "普通订单由申请人确认，券复核后向售后另行申请。不得把普通订单卡片当成券退款入口。",
+      "business_passed": true,
+      "reply_passed": true,
+      "claims": {
+        "order_request_submitted": {
+          "expected": true,
+          "observed": true,
+          "evidence": "已按“尺码不合适”提交，工单号 c549e9c5b6164019",
+          "result": "pass"
+        },
+        "order_customer_must_confirm": {
+          "expected": true,
+          "observed": true,
+          "evidence": "下一步需要**您本人**在确认卡片上操作确认",
+          "result": "pass"
+        },
+        "order_supervisor_must_approve": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "order_no_action_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "下一步需要**您本人**在确认卡片上操作确认",
+          "result": "pass"
+        },
+        "order_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "当前状态为**待审批**（尚未退款）",
+          "result": "pass"
+        },
+        "voucher_contact_support_to_apply": {
+          "expected": true,
+          "observed": true,
+          "evidence": "请**联系售后申请退款**",
+          "result": "pass"
+        },
+        "voucher_can_apply_in_workbench": {
+          "expected": false,
+          "observed": false,
+          "evidence": "该链接仅用于查看复核结论",
+          "result": "pass"
+        },
+        "voucher_agent_can_submit_refund": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "voucher_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "**目前尚未退款**",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T12",
+      "case": "withdraw_order_preserve_voucher",
+      "turn": 1,
+      "rubric": "券复核和 A400 退款审批分开交代，订单需要主管处理，不能要求用户重复提交券争议。",
+      "business_passed": false,
+      "reply_passed": false,
+      "claims": {
+        "voucher_wait_for_review": {
+          "expected": true,
+          "observed": true,
+          "evidence": "下一步就是等待复核",
+          "result": "pass"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "下一步就是等待复核，无需再补充到店资料",
+          "result": "pass"
+        },
+        "order_request_submitted": {
+          "expected": true,
+          "observed": false,
+          "evidence": "你确认后我就提交",
+          "result": "fail"
+        },
+        "order_supervisor_must_approve": {
+          "expected": true,
+          "observed": false,
+          "evidence": "",
+          "result": "fail"
+        },
+        "order_customer_must_confirm": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "order_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "提交后为待审批，不会立即退款",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    },
+    {
+      "turn_id": "T13",
+      "case": "withdraw_order_preserve_voucher",
+      "turn": 2,
+      "rubric": "普通订单已撤回，无需再走审批。券仍待复核，不受普通订单撤回影响。",
+      "business_passed": false,
+      "reply_passed": false,
+      "claims": {
+        "order_withdrawal_succeeded": {
+          "expected": true,
+          "observed": false,
+          "evidence": "之前只是登记、**从未提交**，因此没有待审批工单可撤回",
+          "result": "fail"
+        },
+        "order_supervisor_must_approve": {
+          "expected": false,
+          "observed": false,
+          "evidence": "不会进入审批，也不会退款",
+          "result": "pass"
+        },
+        "order_customer_must_confirm": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        },
+        "order_refund_already_paid": {
+          "expected": false,
+          "observed": false,
+          "evidence": "不会进入审批，也不会退款",
+          "result": "pass"
+        },
+        "voucher_wait_for_review": {
+          "expected": true,
+          "observed": true,
+          "evidence": "状态：**待人工复核（pending_review）**",
+          "result": "pass"
+        },
+        "voucher_submit_required": {
+          "expected": false,
+          "observed": false,
+          "evidence": "",
+          "result": "pass"
+        }
+      },
+      "severe_false_positives": []
+    }
+  ],
+  "model": "deepseek-chat",
+  "settings": {
+    "temperature": 0,
+    "max_sdk_retries": 0,
+    "model_calls_per_turn": 8
+  },
+  "provenance": {
+    "commit": "b126cce6944eed081608f0180d09b10f37d77e6a",
+    "dirty": true,
+    "source_sha256": "1992f359e757e8066c284d15ae83d73333f203b2da042eac22cf772860afeb15"
+  },
+  "prompt_sha256": "2962e837acaf576dd88b15d2c6c77c2904c160b26ac5e106b6ed2839cb8f12f8",
+  "checkpoint_recovery": {
+    "recovered_cases": 9,
+    "completed_after_recovery": 1,
+    "checkpoint_sha256": "bc11977a58c821d8b9afc3b388d5f8bd07f35cbaaad0c627f3a5a70132ecd22e",
+    "reason": "Windows sharing violation when replacing checkpoint"
+  },
+  "independent_annotation": {
+    "agreed": 70,
+    "total": 72,
+    "audit_digests": [
+      "2b3b27bb9f96d0ac67648ef6450755648c26b541775b85b4588b4d4037173939",
+      "e38185f0e6448889ed4df3c92ef6a87221fb00a29c81b0615f262fffb0bc6652"
+    ],
+    "adjudication": [
+      {
+        "turn_id": "T06",
+        "claim": "order_supervisor_must_approve",
+        "audit_a": true,
+        "audit_b": false,
+        "adjudicated": true,
+        "reason": "这是对当前 A300 工单流程中一个后续必经步骤的断言，不是另一个假设中的订单。"
+      },
+      {
+        "turn_id": "T09",
+        "claim": "voucher_contact_support_to_apply",
+        "audit_a": null,
+        "audit_b": true,
+        "adjudicated": null,
+        "reason": "先给联系售后的正确指引，随后将同一券退款引向普通订单流程，不能据此确定用户该走哪条路。"
+      }
+    ]
+  },
+  "joint": {
+    "both_passed_cases": 7,
+    "both_passed_turns": 9,
+    "business_passed_reply_failed_cases": 2,
+    "business_passed_reply_failed_turns": 2
+  },
+  "business_safety": {
+    "refund_executions": 0,
+    "unexpected_dispute_writes": 0
+  },
+  "usage": {
+    "calls": 51,
+    "with_usage": 51,
+    "input_tokens": 106346,
+    "output_tokens": 5377
+  },
+  "fixture_cross_check": {
+    "order_id": "A400",
+    "fresh_seed_lookup_refundable": true
+  }
+}

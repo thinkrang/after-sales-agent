@@ -95,10 +95,10 @@ pytest 使用脚本模型的集成测试保留真实业务服务和数据库，�
 
 ```bash
 python scripts/verify_project.py --output work/planning-verification
-python plan_eval.py --repeat 3 --output work/planning-system.json
+python -m evaluation.plan_eval --repeat 3 --output work/planning-system.json
 
 # 余额恢复后再运行；产生 API 费用
-python plan_eval.py --with-model --variant legacy --output work/planning-model.json
+python -m evaluation.plan_eval --with-model --variant legacy --output work/planning-model.json
 ```
 
 可将“结构化规划、依赖调度、局部重规划、幂等与崩溃恢复”写入简历。

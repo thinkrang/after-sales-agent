@@ -17,7 +17,7 @@ Recall@5 必然 100% —— 指标饱和，失去区分度。
 
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 KNOWLEDGE_DIR = BASE_DIR / "knowledge"
 
 DISTRACTORS = {

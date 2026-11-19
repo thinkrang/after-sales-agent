@@ -1,6 +1,6 @@
 
 import time
-from test_answerability import check_answerability
+from evaluation.test_answerability import check_answerability
 
 # 知识库有答案的问题
 POSITIVE = [

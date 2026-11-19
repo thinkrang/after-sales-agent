@@ -51,7 +51,7 @@
 
 ```bash
 python -m pytest tests/test_mixed_holdout_eval.py -q
-python mixed_holdout_eval.py --with-model --output work/mixed-holdout/new-run.json
+python -m evaluation.mixed_holdout_eval --with-model --output work/mixed-holdout/new-run.json
 ```
 
 第二条命令会使用 DeepSeek API 额度。输出路径需为新文件，以保留先前报告。运行报告同时记录场景、提示和源码摘要。

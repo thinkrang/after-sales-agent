@@ -51,8 +51,8 @@ python scripts/run_voucher_demo.py --mixed
 
 ```bash
 python -m pytest tests/test_mixed_voucher.py -q
-python mixed_eval.py --output work/mixed-agent/comparison.json
-python mixed_eval.py --with-model --output work/mixed-agent/live-smoke.json
+python -m evaluation.mixed_eval --output work/mixed-agent/comparison.json
+python -m evaluation.mixed_eval --with-model --output work/mixed-agent/live-smoke.json
 ```
 
 前两个命令使用脚本模型或确定性工具路径。最后一个使用付费 DeepSeek API，在隔离库中对两轮自然语言输入进行试跑。真实模型试跑单独记录，配对表衡量调度策略的查询和补问开销。

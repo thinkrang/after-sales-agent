@@ -44,8 +44,8 @@ python -m pytest tests/test_plan_recovery_eval.py -q
 配有可用 DeepSeek API 额度时，先运行每场景、每种方案一遍，再各重复三次。以下命令会调用付费 API。
 
 ```bash
-python plan_eval.py --suite recovery --with-model --variant both --repeat 1 --output work/plan-recovery/pilot.json
-python plan_eval.py --suite recovery --with-model --variant both --repeat 3 --output work/plan-recovery/paired.json
+python -m evaluation.plan_eval --suite recovery --with-model --variant both --repeat 1 --output work/plan-recovery/pilot.json
+python -m evaluation.plan_eval --suite recovery --with-model --variant both --repeat 3 --output work/plan-recovery/paired.json
 ```
 
 本地新增 9 项测试通过，包含 4 次正确路径、4 种错误行为和配对因供应商错误中止时的报告校验。

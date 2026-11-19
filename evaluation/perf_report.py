@@ -4,15 +4,15 @@
 
 用法
 ----
-    python perf_report.py            # 默认 8 次检索 + 3 次完整对话
-    python perf_report.py 20 5       # 自定义次数
+    python -m evaluation.perf_report            # 默认 8 次检索 + 3 次完整对话
+    python -m evaluation.perf_report 20 5       # 自定义次数
 """
 
 import sys
 
 import perf
 from api import app, search_shop_info
-from eval_dataset import retrieval_cases
+from evaluation.eval_dataset import retrieval_cases
 
 QUESTIONS = [
     "退货政策是什么",

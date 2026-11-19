@@ -1,7 +1,7 @@
 """Recover refunds approved before a process/network failure.
 
 Usage:
-    python reconcile_refunds.py
+    python -m scripts.reconcile_refunds
 
 The script is safe to run repeatedly. Each recovery reuses the original
 approval payload and ticket id as the downstream idempotency key.

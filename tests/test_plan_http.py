@@ -10,7 +10,7 @@ import orchestrator
 import plan_store
 import tickets
 from conftest import parse_sse
-from plan_eval import fixed_plan_tool
+from evaluation.plan_eval import fixed_plan_tool
 from planning import refund_plan
 from test_task_http import task_api, script
 from test_detached_tasks import detached_api, say

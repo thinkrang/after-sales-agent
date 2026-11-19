@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from task_scenarios import CONFIRM, cases
+from evaluation.task_scenarios import CONFIRM, cases
 
 
 class CheckFailure(AssertionError):
@@ -264,7 +264,7 @@ def run_model(repeat=1, *, split="dev", variant="structured", max_model_calls=40
             with TestClient(api.app) as client:
                 api.app.state.llm.max_retries = 0
                 api.app.state.llm.request_timeout = 30
-                from test_answerability import get_llm
+                from evidence import get_llm
                 get_llm().max_retries = 0
                 get_llm().request_timeout = 30
                 if variant == "messages":
@@ -280,7 +280,7 @@ def run_model(repeat=1, *, split="dev", variant="structured", max_model_calls=40
                         orders.init_order_db()
                         usage = Usage()
                         api.app.state.llm.callbacks = [usage]
-                        from test_answerability import get_llm
+                        from evidence import get_llm
                         get_llm().callbacks = [usage]
                         row = run_case(api, client, case, attempt, usage)
                         row.update(model=api.app.state.llm.model_name, variant=variant)

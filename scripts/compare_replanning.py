@@ -85,7 +85,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="replan-ablation-") as directory:
         os.environ["AGENT_DATA_DIR"] = directory
         import db
-        from task_eval import provenance
+        from evaluation.task_eval import provenance
 
         rows = []
         try:

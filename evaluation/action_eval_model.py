@@ -16,8 +16,8 @@
 
 用法
 ----
-    python action_eval_model.py            # 人类可读
-    python action_eval_model.py --json     # 给 action_eval.py 解析
+    python -m evaluation.action_eval_model            # 人类可读
+    python -m evaluation.action_eval_model --json     # 给 action_eval.py 解析
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import time
 import uuid
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent
+BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
 
 # 必须在 import api 之前

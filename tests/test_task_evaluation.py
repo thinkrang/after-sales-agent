@@ -2,9 +2,9 @@ import copy
 
 import pytest
 
-import task_eval
-from task_scenarios import CASES, cases, fingerprint
-from task_eval_model import reason_matches
+from evaluation import task_eval
+from evaluation.task_scenarios import CASES, cases, fingerprint
+from evaluation.task_eval_model import reason_matches
 
 
 def test_scenarios_are_unique_and_partitions_do_not_overlap():

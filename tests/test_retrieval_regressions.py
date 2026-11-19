@@ -7,8 +7,8 @@ from langchain_core.documents import Document
 
 import rag
 import retrieval
-import evaluate_rag
-import tune_rrf
+from evaluation import evaluate_rag
+from evaluation import tune_rrf
 
 
 @pytest.fixture

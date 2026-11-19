@@ -390,7 +390,7 @@ def main() -> int:
                 print(f"  - {step}: {note}")
     print("=" * 72)
     if args.output:
-        from task_eval import provenance
+        from evaluation.task_eval import provenance
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps({
             "provenance": provenance(), "passed": passed, "failed": failed,

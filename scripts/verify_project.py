@@ -26,9 +26,10 @@ sys.path.insert(0, str(ROOT))
 
 
 def source_manifest():
-    paths = (list(ROOT.glob("*.py")) + list((ROOT / "scripts").glob("*.py"))
+    paths = (list(ROOT.glob("*.py")) + list((ROOT / "evaluation").rglob("*.py")) + list((ROOT / "scripts").glob("*.py"))
              + list((ROOT / "tests").glob("*.py")) + list((ROOT / "skills").rglob("*.md"))
              + list((ROOT / "skills").rglob("*.py"))
+             + [ROOT / "index.html"] + list((ROOT / "static").glob("*"))
              + [ROOT / "requirements.txt", ROOT / "docs/evaluation/voucher-policy-fixtures.json"])
     return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(paths)}
@@ -46,7 +47,7 @@ def main():
                AGENT_DATA_DIR=str(run_dir / "data"), AGENT_VECTOR_DB_DIR=str(run_dir / "vector_db"),
                AGENT_UPLOAD_DIR=str(run_dir / "uploads"), HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1",
                AUTH_SEED_DEMO_USERS="1")
-    from task_eval import provenance
+    from evaluation.task_eval import provenance
     report = dict(date=datetime.now(timezone.utc).isoformat(), provenance=provenance(),
                   python=sys.version, executable=sys.executable, platform=platform.platform(),
                   directory=str(run_dir), with_model=args.with_model, stages=[])
@@ -86,20 +87,20 @@ def main():
         return 1
     run("pytest", py + ["-m", "pytest", "-o", "addopts=", "-m", "not llm", "-q",
                            f"--junitxml={run_dir / 'pytest.xml'}"])
-    run("actions", py + ["action_eval.py", "--output", str(run_dir / "actions.json")])
-    run("tasks", py + ["task_eval.py", "--repeat", "3", "--output", str(run_dir / "tasks.json")])
-    run("plans", py + ["plan_eval.py", "--repeat", "3", "--output", str(run_dir / "plans.json")])
+    run("actions", py + ["-m", "evaluation.action_eval", "--output", str(run_dir / "actions.json")])
+    run("tasks", py + ["-m", "evaluation.task_eval", "--repeat", "3", "--output", str(run_dir / "tasks.json")])
+    run("plans", py + ["-m", "evaluation.plan_eval", "--repeat", "3", "--output", str(run_dir / "plans.json")])
     run("replanning", py + ["scripts/compare_replanning.py", "--repeat", "10",
                              "--output", str(run_dir / "replanning.json")])
     run("voucher-replay", py + ["scripts/replay_voucher_policy.py", "--output-dir", str(run_dir / "voucher-replay")])
-    run("mixed-cases", py + ["mixed_eval.py", "--output", str(run_dir / "mixed-cases.json")])
+    run("mixed-cases", py + ["-m", "evaluation.mixed_eval", "--output", str(run_dir / "mixed-cases.json")])
     # 用新建的干净索引做权重实验；测试写入的上传样本不能改变评测语料。
     run("refresh-index", py + ["-c", "import rag; rag.build_index()"])
-    run("rrf", py + ["tune_rrf.py", "--holdout", "--output", str(run_dir / "rrf.json")])
+    run("rrf", py + ["-m", "evaluation.tune_rrf", "--holdout", "--output", str(run_dir / "rrf.json")])
     if args.with_model:
-        run("model-plans", py + ["plan_eval.py", "--with-model", "--output", str(run_dir / "model-plans.json")])
+        run("model-plans", py + ["-m", "evaluation.plan_eval", "--with-model", "--output", str(run_dir / "model-plans.json")])
         run("evidence-live", py + ["scripts/probe_evidence.py", "--output", str(run_dir / "evidence-live.json")])
-        run("model-actions", py + ["action_eval.py", "--with-model", "--output", str(run_dir / "model-actions.json")])
+        run("model-actions", py + ["-m", "evaluation.action_eval", "--with-model", "--output", str(run_dir / "model-actions.json")])
         run("acceptance", py + ["scripts/acceptance_e2e.py", "--output", str(run_dir / "acceptance.json")])
     docker = shutil.which("docker")
     if docker:

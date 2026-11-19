@@ -8,7 +8,7 @@
 
 用法（在你自己的终端里跑，不要在受限环境里跑）
 ---------------------------------------------
-    python download_reranker.py
+    python -m scripts.download_reranker
 
 如果官方源连不上，脚本会自动改用国内镜像 hf-mirror.com 重试。
 

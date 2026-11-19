@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mini Agent</title>
+<link rel="icon" type="image/png" href="/static/agent-mark.png">
 <style>
 :root{
   --bg:#fff; --bg-soft:#fcfcfa;
@@ -56,18 +57,14 @@ button{font:inherit;color:inherit}
 }
 .side-head{display:flex;align-items:center;gap:11px;padding:18px 16px 14px}
 .brand-mark{
-  width:32px;height:32px;flex:0 0 32px;border-radius:10px;
-  background:linear-gradient(145deg,#6366f1,#4338ca);
-  color:#fff;display:grid;place-items:center;
-  box-shadow:0 2px 8px rgba(79,70,229,.28);
+  width:36px;height:36px;flex:0 0 36px;border-radius:11px;
+  overflow:hidden;display:grid;place-items:center;
+  box-shadow:0 3px 10px rgba(79,70,229,.15);
 }
-html[data-theme="dark"] .brand-mark{
-  background:linear-gradient(145deg,#8b85ff,#5b52e0);
-  box-shadow:0 2px 12px rgba(139,133,255,.24);
+.brand-mark img,.welcome-mark img{
+  width:114%;height:114%;max-width:none;object-fit:cover;display:block;
 }
-.brand-mark svg{width:17px;height:17px}
 .brand-name{font-size:14.5px;font-weight:600;letter-spacing:-.012em;line-height:1.25}
-.brand-sub{font-size:11px;color:var(--faint);margin-top:2px;letter-spacing:.01em}
 .new-chat{
   margin:0 12px 10px;padding:10px 13px;display:flex;align-items:center;gap:8px;
   border:1px solid var(--border);background:var(--bg);border-radius:11px;
@@ -147,11 +144,6 @@ input.rename{
 }
 .icon-btn:hover{background:var(--side-hover);color:var(--text)}
 .menu-btn{display:none}
-.pill{
-  font-size:11.5px;color:var(--dim);border:1px solid var(--border);
-  border-radius:999px;padding:4px 10px;white-space:nowrap;
-  background:var(--bg-soft);font-weight:500;letter-spacing:.01em;
-}
 .scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;scroll-behavior:smooth}
 .thread{max-width:760px;margin:0 auto;padding:32px 24px 44px;display:flex;flex-direction:column;gap:22px;min-height:100%}
 
@@ -335,16 +327,10 @@ details.tool-res pre{
   flex:1;text-align:center;padding:56px 24px;
 }
 .welcome-mark{
-  width:60px;height:60px;border-radius:18px;
-  background:linear-gradient(145deg,#6366f1,#4338ca);
-  color:#fff;display:grid;place-items:center;margin-bottom:22px;
-  box-shadow:0 8px 28px rgba(79,70,229,.26),0 2px 6px rgba(79,70,229,.2);
+  width:76px;height:76px;border-radius:23px;
+  overflow:hidden;display:grid;place-items:center;margin-bottom:24px;
+  box-shadow:0 10px 28px rgba(79,70,229,.16);
 }
-html[data-theme="dark"] .welcome-mark{
-  background:linear-gradient(145deg,#8b85ff,#5b52e0);
-  box-shadow:0 8px 32px rgba(139,133,255,.22);
-}
-.welcome-mark svg{width:29px;height:29px}
 .welcome h2{
   margin:0 0 9px;font-size:23px;font-weight:600;letter-spacing:-.022em;
   line-height:1.3;
@@ -476,10 +462,9 @@ html[data-theme="dark"] .welcome-mark{
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="side-head">
-      <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 11.6a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.5-.9L3.5 20.5l1.4-4.4a8.4 8.4 0 0 1-.9-3.8 8.4 8.4 0 0 1 8.4-8.4 8.4 8.4 0 0 1 8.1 7.7z"/><circle cx="9.2" cy="11.4" r="1.05" fill="currentColor" stroke="none"/><circle cx="12.4" cy="11.4" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.6" cy="11.4" r="1.05" fill="currentColor" stroke="none"/></svg></div>
+      <div class="brand-mark"><img src="/static/agent-mark.png" alt="" width="36" height="36"></div>
       <div>
         <div class="brand-name">Mini Agent</div>
-        <div class="brand-sub">LangChain · RAG · DeepSeek</div>
       </div>
     </div>
 
@@ -517,7 +502,6 @@ html[data-theme="dark"] .welcome-mark{
     <header class="chat-top">
       <button class="icon-btn menu-btn" id="menuBtn" aria-label="打开侧边栏">☰</button>
       <div class="chat-title" id="chatTitle">新对话</div>
-      <span class="pill">DeepSeek</span>
     </header>
 
     <details id="refundPlan" hidden style="padding:10px 24px;border-bottom:1px solid var(--border);font-size:13px;max-height:240px;overflow:auto">
@@ -532,6 +516,9 @@ html[data-theme="dark"] .welcome-mark{
       <div id="refundTaskHistory"></div>
     </details>
 
+    <section id="customerNextSteps" hidden aria-label="售后下一步" aria-live="polite"
+             style="padding:8px 24px;border-bottom:1px solid var(--border);font-size:13px;max-height:28vh;overflow:auto"></section>
+
     <div class="scroll" id="scroll">
       <div class="thread" id="thread"></div>
     </div>
@@ -541,7 +528,7 @@ html[data-theme="dark"] .welcome-mark{
         <textarea id="input" rows="1" placeholder="给 Mini Agent 发送消息…"></textarea>
         <button class="send-btn" id="send" aria-label="发送">↑</button>
       </div>
-      <div class="hint">Enter 发送 · Shift + Enter 换行 · 回答由 DeepSeek 生成</div>
+      <div class="hint">Enter 发送 · Shift + Enter 换行</div>
     </div>
   </main>
 </div>
@@ -658,6 +645,36 @@ html[data-theme="dark"] .welcome-mark{
     }
   }
 
+  let nextSteps = [];
+
+  function renderNextSteps(steps) {
+    if (!Array.isArray(steps)) return;
+    nextSteps = steps;
+    const panel = document.getElementById("customerNextSteps");
+    panel.replaceChildren();
+    panel.hidden = !steps.length;
+    for (const step of steps) {
+      const row = document.createElement("p");
+      const name = document.createElement("strong");
+      name.textContent = (step.kind === "voucher" ? "团购券 " : "订单 ") + step.entity_id + " · ";
+      row.append(name, step.text);
+      if (typeof step.href === "string" && step.href.startsWith("/voucher-center?") && step.link_label) {
+        const link = document.createElement("a");
+        link.href = step.href;
+        link.textContent = step.link_label;
+        row.append(" ", link);
+      }
+      panel.appendChild(row);
+    }
+  }
+
+  function clearRetiredApprovalCards(actions) {
+    const active = new Set(actions.map(action => action.approval_id || ""));
+    el.thread.querySelectorAll("[data-approval-id]").forEach(card => {
+      if (!active.has(card.dataset.approvalId)) card.remove();
+    });
+  }
+
   document.getElementById("refundPlanHistoryBtn").onclick = async () => {
     const sid = state.currentId;
     if (!sid) return;
@@ -695,11 +712,15 @@ html[data-theme="dark"] .welcome-mark{
       const plan = await api("/sessions/" + encodeURIComponent(sid) + "/plan");
       if (state.currentId !== sid || state.loading) return;
       renderPlan(plan);
+      if (Array.isArray(plan?.pending)) clearRetiredApprovalCards(plan.pending);
+      if (Array.isArray(plan?.next_steps)) {
+        renderNextSteps([...plan.next_steps, ...nextSteps.filter(step => step.kind === "voucher")]);
+      }
       const missing = (plan?.pending || []).filter(a => !Array.from(document.querySelectorAll("[data-approval-id]")).some(c => c.dataset.approvalId === a.approval_id));
       if (missing.length) {
         const turn = document.createElement("div");
         el.thread.appendChild(turn);
-        showApproval(turn, { thread_id:sid, actions:missing });
+        showApproval(turn, { thread_id:sid, actions:missing, next_steps:plan.next_steps });
       }
     } catch (_) { /* Next poll or an explicit refresh will retry. */ }
   }, 5000);
@@ -1045,6 +1066,7 @@ html[data-theme="dark"] .welcome-mark{
   function clearThread() {
     renderTask(null);
     renderPlan(null);
+    renderNextSteps([]);
     el.thread.innerHTML = "";
   }
 
@@ -1053,9 +1075,9 @@ html[data-theme="dark"] .welcome-mark{
     const wrap = document.createElement("div");
     wrap.className = "welcome";
     wrap.innerHTML =
-      '<div class="welcome-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 11.6a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.5-.9L3.5 20.5l1.4-4.4a8.4 8.4 0 0 1-.9-3.8 8.4 8.4 0 0 1 8.4-8.4 8.4 8.4 0 0 1 8.1 7.7z"/><circle cx="9.2" cy="11.4" r="1.05" fill="currentColor" stroke="none"/><circle cx="12.4" cy="11.4" r="1.05" fill="currentColor" stroke="none"/><circle cx="15.6" cy="11.4" r="1.05" fill="currentColor" stroke="none"/></svg></div>' +
+      '<div class="welcome-mark"><img src="/static/agent-mark.png" alt="" width="76" height="76"></div>' +
       "<h2>有什么可以帮你？</h2>" +
-      "<p>我可以查询店铺知识库、计算订单金额</p>";
+      "<p>查询订单、申请退款，跟进团购券核销争议。</p>";
 
     const sugs = document.createElement("div");
     sugs.className = "sugs";
@@ -1224,19 +1246,22 @@ html[data-theme="dark"] .welcome-mark{
 
     try {
       const data = await api("/sessions/" + id + "/messages");
+      if (state.currentId !== id) return;
       renderHistory(data.messages);
       renderTask(data.refund_task);
       renderPlan(data.refund_plan);
+      renderNextSteps(data.next_steps);
 
       // 刷新页面后如果还有待审批的操作，把确认卡片补回来
       if (data.pending && data.pending.length) {
         const turn = document.createElement("div");
         turn.className = "turn";
         el.thread.appendChild(turn);
-        showApproval(turn, { thread_id: id, actions: data.pending });
+        showApproval(turn, { thread_id: id, actions: data.pending, next_steps: data.next_steps });
         scrollToBottom(true);
       }
     } catch (err) {
+      if (state.currentId !== id) return;
       clearThread();
       const p = document.createElement("div");
       p.className = "hist-loading err";
@@ -1411,7 +1436,7 @@ html[data-theme="dark"] .welcome-mark{
     if (e.target === el.queueMask) el.queueMask.classList.remove("show");
   });
 
-  function approvalCard(actions) {
+  function approvalCard(actions, guidance) {
     const box = document.createElement("div");
     box.className = "approval";
 
@@ -1482,7 +1507,9 @@ html[data-theme="dark"] .welcome-mark{
     box.appendChild(acts);
 
     const blocked = actions.some((action) => !action.approval_id);
-    approve.disabled = blocked;
+    const canConfirm = !Array.isArray(guidance) || guidance.some(step =>
+      step.code === "refund_customer_confirm" && step.approval_id === actions[0].approval_id);
+    approve.disabled = blocked || !canConfirm;
     reject.disabled = blocked;
     if (needsManager) {
       // 客户点批准只会拿到 403，不如直接说明情况。
@@ -1569,15 +1596,24 @@ html[data-theme="dark"] .welcome-mark{
           scrollToBottom();
         }
       } else if (type === "interrupt") {
-        renderTask(data.refund_task);
-        renderPlan(data.refund_plan);
+        if (state.currentId === payload.thread_id) {
+          renderTask(data.refund_task);
+          renderPlan(data.refund_plan);
+          renderNextSteps(data.next_steps);
+          if (Array.isArray(data.actions)) clearRetiredApprovalCards(data.actions);
+        }
         finished = true;
         interrupt = data;
       } else if (type === "error") {
         throw new Error(data.message || "流式回答失败");
       } else if (type === "done") {
-        renderTask(data.refund_task);
-        renderPlan(data.refund_plan);
+        if (state.currentId === payload.thread_id) {
+          renderTask(data.refund_task);
+          renderPlan(data.refund_plan);
+          renderNextSteps(data.next_steps);
+          if (Array.isArray(data.next_steps)) clearRetiredApprovalCards(data.actions || []);
+        }
+        if (data.actions?.length) interrupt = data;
         finished = true;
       }
     };
@@ -1649,7 +1685,7 @@ html[data-theme="dark"] .welcome-mark{
     document.querySelectorAll("[data-approval-id]").forEach(c => {
       if (c.dataset.approvalId === action.approval_id) c.remove();
     });
-    const card = approvalCard(interrupt.actions || []);
+    const card = approvalCard(interrupt.actions || [], interrupt.next_steps);
     card.box.dataset.approvalId = action.approval_id || "";
     turn.appendChild(card.box);
     scrollToBottom();
@@ -1668,7 +1704,13 @@ html[data-theme="dark"] .welcome-mark{
           const updated = await api(taskUrl, { method: "PATCH", body: JSON.stringify({
             expected_revision: task.revision, ...values,
           }) });
-          if (action.task_id) renderPlan(updated); else renderTask(updated);
+          if (state.currentId === interrupt.thread_id) {
+            if (action.task_id) renderPlan(updated); else renderTask(updated);
+            renderNextSteps(nextSteps.filter(step => step.kind !== "refund" || step.entity_id !== action.args.order_id));
+            api(base + "/messages").then(data => {
+              if (state.currentId === interrupt.thread_id && !state.loading) renderNextSteps(data.next_steps);
+            }).catch(() => {});
+          }
           const result = document.createElement("div");
           result.className = "approval-done no";
           result.textContent = cancel

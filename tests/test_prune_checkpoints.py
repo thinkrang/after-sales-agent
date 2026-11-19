@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import pytest
 
 import db
-import prune_checkpoints
+from scripts import prune_checkpoints
 import tickets
 
 SESSION_FMT = "%Y-%m-%d %H:%M:%S"

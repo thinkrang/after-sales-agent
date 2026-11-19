@@ -27,7 +27,7 @@ TENANT = None 表示以"公共用户"视角评测（只看 public 文档）。
 
 import time
 
-from eval_dataset import retrieval_cases, stats
+from evaluation.eval_dataset import retrieval_cases, stats
 from retrieval import retrieve, reranker_ready
 
 TOP_K = 10

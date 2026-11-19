@@ -9,7 +9,7 @@ import refund_service
 import refund_tasks as tasks
 import tickets
 from auth import User
-from task_eval import SYSTEM_CASES
+from evaluation.task_eval import SYSTEM_CASES
 
 
 @pytest.fixture

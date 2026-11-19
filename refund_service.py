@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import nullcontext
 from dataclasses import dataclass
 
 import orders
@@ -34,6 +35,17 @@ class WorkflowConflict(RuntimeError):
 class ApprovalDecision:
     ticket: dict
     status: str
+
+
+SINGLE_REFUND_INSTRUCTIONS = (
+    "单笔普通订单：用户明确要求提交退款，并已给出订单号与原因时，直接调用 request_order_refund。"
+    "这个工具在服务端核实订单归属、退款资格和风险，再提交待确认的申请。"
+    "缺少字段时追问；补充已登记的申请时可从当前任务读取已有字段，不要猜。"
+    "只咨询资格或金额用只读查询；询问政策用知识库。"
+    "改订单或原因时核实用户意图，明确要求重新提交后带当前 expected_revision 调用；"
+    "未明确重提时只更新任务。明确取消用 withdraw_refund_request，插话不修改任务。"
+    "遇到版本冲突先读当前任务。以工具和工单返回的实际结果为准。"
+)
 
 
 def _normalize_reason(reason: str) -> str:
@@ -89,6 +101,7 @@ def prepare_ticket(
     reason: str,
     task_revision: int | None = None,
     approval_protocol: str = "legacy",
+    _conn=None,
 ) -> tuple[dict, dict]:
     """Create the pending approval record before returning an interrupt."""
     # Fail with task preconditions before attempting an incomplete order lookup.
@@ -96,7 +109,7 @@ def prepare_ticket(
     # edit-vs-approval-creation race.
     import db
     from refund_tasks import guard_action
-    with db.session(tickets.DB_PATH) as conn:
+    with (nullcontext(_conn) if _conn is not None else db.session(tickets.DB_PATH)) as conn:
         guard_action(
             conn, tenant_id=user.tenant_id, requester_id=user.username,
             thread_id=thread_id, order_id=order_id.strip(), reason=reason,
@@ -116,6 +129,7 @@ def prepare_ticket(
         tenant_id=user.tenant_id,
         requester_id=user.username,
         hours=risk.RECENT_WINDOW_HOURS,
+        _conn=_conn,
     )
     assessment = risk.assess(order, decision, reason=reason, recent_executed=recent)
 
@@ -134,8 +148,52 @@ def prepare_ticket(
         rule_version=assessment.rule_version,
         task_revision=task_revision,
         approval_protocol=approval_protocol,
+        _conn=_conn,
     )
     return ticket, order
+
+
+def request_order_refund(user: User, *, thread_id: str, order_id: str, reason: str,
+                         expected_revision: int | None = None, turn_id: str = "") -> dict:
+    """Persist the task and its pending approval in one transaction."""
+    import db
+    import plan_store
+    import refund_tasks
+
+    order_id, reason = order_id.strip(), _normalize_reason(reason)
+    if not order_id or len(order_id) > 64 or not reason or len(reason) > 500:
+        raise ValueError("需要有效的订单号和退款原因")
+    with db.session(tickets.DB_PATH) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if plan_store.get(user, thread_id, _conn=conn):
+            raise refund_tasks.TaskConflict("会话已有多笔计划，请指定对应的计划任务")
+        if tickets.conversation_closed(conn, user.tenant_id, user.username, thread_id):
+            raise refund_tasks.TaskConflict("会话已关闭，不能提交新的退款申请")
+
+        task = refund_tasks.get(user, thread_id, _conn=conn)
+        revision = task["revision"]
+        same_payload = (task["order_id"], task["reason"]) == (order_id, reason)
+        # A retry of the preceding update can carry the pre-update revision.
+        if (same_payload and expected_revision in (None, revision, revision - 1)
+                and task["status"] in {"pending_approval", "approved", "executing", "executed"}):
+            row = conn.execute("SELECT * FROM refund_tickets WHERE id=?", (task["ticket_id"],)).fetchone()
+            return dict(row)
+        if expected_revision is not None and expected_revision != revision:
+            raise refund_tasks.TaskConflict("任务版本已变化，请重新读取并确认")
+        replacing = (task["order_id"] and task["order_id"] != order_id) or (
+            task["reason"] and task["reason"] != reason)
+        reopening = task["status"] in {"cancelled", "rejected", "failed"}
+        if (replacing or reopening) and expected_revision is None:
+            raise refund_tasks.TaskConflict("修改或重新提交前请读取任务并提供当前版本")
+        task = refund_tasks.update(
+            user, thread_id, expected_revision=revision, order_id=order_id, reason=reason,
+            intent="apply", source="chat", turn_id=turn_id, _conn=conn,
+        )
+        ticket, _ = prepare_ticket(
+            user, thread_id=thread_id, order_id=order_id, reason=reason,
+            task_revision=task["revision"], approval_protocol="detached", _conn=conn,
+        )
+        return ticket
 
 
 def find_pending_for_action(

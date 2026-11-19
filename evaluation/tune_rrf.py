@@ -1,7 +1,7 @@
 """按线上 top_k=3 扫描 RRF 权重；默认只使用 dev。
 
-python tune_rrf.py --output work/rrf-dev.json
-python tune_rrf.py --holdout --output work/rrf-with-holdout.json
+python -m evaluation.tune_rrf --output work/rrf-dev.json
+python -m evaluation.tune_rrf --holdout --output work/rrf-with-holdout.json
 
 选择规则预先固定为 dev R@3、再 MRR@10，平局取 GRID 中首项。
 --holdout 只评估选定权重，不扫描留出集；历史上已看过的题不算未见数据。
@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import retrieval
-from eval_dataset import retrieval_cases
-from evaluate_rag import run_strategy
-from task_eval import provenance
+from evaluation.eval_dataset import retrieval_cases
+from evaluation.evaluate_rag import run_strategy
+from evaluation.task_eval import provenance
 
 GRID = [(1.0, 0.0), (0.9, 0.1), (0.8, 0.2), (0.7, 0.3),
         (0.6, 0.4), (0.5, 0.5), (0.4, 0.6), (0.0, 1.0)]

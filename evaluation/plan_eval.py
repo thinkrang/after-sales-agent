@@ -15,8 +15,7 @@ import tempfile
 import time
 import uuid
 
-import plan_recovery_eval as recovery
-
+from evaluation import plan_recovery_eval as recovery
 CASES = [
     {"id": "dual", "messages": ["请帮我同时申请两笔退款：A300尺码不合适，A400有质量问题。A400等主管时先处理A300。"]},
     {"id": "edit", "messages": ["A300尺码不合适，A400质量问题，两笔都申请退款。",
@@ -79,7 +78,7 @@ def _run_case(case, variant, root, *, real_model, model_factory):
     import orchestrator
     from auth import User
     from planning import PLAN_INSTRUCTIONS, refund_plan
-    from task_eval_model import reason_matches
+    from evaluation.task_eval_model import reason_matches
 
     user = User("acme-user", "客户", "acme", frozenset({"customer"}))
     manager = User("acme-manager", "主管", "acme", frozenset({"customer", "approver"}))
@@ -322,7 +321,7 @@ def main():
     rows = []
     with tempfile.TemporaryDirectory(prefix="plan-eval-") as directory:
         os.environ.update(AGENT_DATA_DIR=directory, PLAN_WORKER_ENABLED="0")
-        from task_eval import provenance
+        from evaluation.task_eval import provenance
         report = {"provenance":provenance(), "python":platform.python_version(), "dataset":selected,
                   "protocol":"recovery-postconditions-v1" if args.suite == "recovery" else "business-postconditions-v2",
                   "mode":"real_model" if args.with_model else "system",

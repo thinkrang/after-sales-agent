@@ -61,7 +61,7 @@ flowchart TD
 | `agent_context.py` | 每次调用注入服务端计划摘要，避免仅靠聊天记忆判断状态 |
 | `index.html` | 独立审批卡片、计划进度、处理记录、状态刷新 |
 | `scripts/recover_plans.py` | 独立于模型的计划恢复入口 |
-| `plan_eval.py` | 业务终态评测和可选真实模型对照 |
+| `evaluation/plan_eval.py` | 业务终态评测和可选真实模型对照 |
 
 ## 关键工程契约
 
@@ -142,12 +142,12 @@ python scripts/recover_plans.py
 
 ## 如何复现验证
 
-`plan_eval.py` 默认走模拟订单和 SQLite，使用预设任务输入。安装轻量依赖后就可以运行双订单演示，
+`evaluation/plan_eval.py` 默认走模拟订单和 SQLite，使用预设任务输入。安装轻量依赖后就可以运行双订单演示，
 无需模型 API Key、Redis 或向量索引：
 
 ```bash
 python -m pip install "fastapi==0.147.0" "pydantic==2.13.5" "python-dotenv==1.2.3"
-python plan_eval.py --cases dual --output work/planning/demo.json
+python -m evaluation.plan_eval --cases dual --output work/planning/demo.json
 ```
 
 演示验证两笔独立待审批、客户不能自批 A400、A300 可先办结、最终两笔各退款一次。
@@ -155,12 +155,12 @@ python plan_eval.py --cases dual --output work/planning/demo.json
 
 ```bash
 python -m pytest tests/test_planning.py tests/test_plan_http.py tests/test_mcp_tools.py tests/test_evidence_verdict.py -q
-python plan_eval.py --repeat 3 --output work/planning/system.json
+python -m evaluation.plan_eval --repeat 3 --output work/planning/system.json
 python scripts/compare_replanning.py --repeat 10 --output work/planning/replanning.json
 python scripts/verify_project.py --output work/planning/verification
 
 # 真实模型试跑：产生 API 费用，每场景每方案最多 16 次模型调用
-python plan_eval.py --with-model --variant both --cases dual --output work/planning/model-pilot.json
+python -m evaluation.plan_eval --with-model --variant both --cases dual --output work/planning/model-pilot.json
 ```
 
 确定性测试使用真实 SQLite、订单/退款服务；HTTP 集成测试使用真实 FastAPI、LangGraph 和 checkpoint，

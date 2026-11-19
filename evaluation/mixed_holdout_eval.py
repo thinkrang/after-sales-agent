@@ -8,19 +8,49 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
 from unittest.mock import patch
 import uuid
 
 
-DATASET = Path(__file__).resolve().parent / "docs/evaluation/mixed-holdout-v1.json"
+DATASET = Path(__file__).resolve().parents[1] / "docs/evaluation/mixed-holdout-v1.json"
 MODEL = "deepseek-chat"
-REFUND_TOOLS = ("update_refund_task", "submit_refund_request", "withdraw_refund_request")
+REFUND_TOOLS = ("update_refund_task", "submit_refund_request", "request_order_refund", "withdraw_refund_request")
+EVENTS = {"merchant_matches", "review_resolved", "review_eligible", "review_redeemed", "resolved_then_merchant"}
+ACTION_CODES = {
+    "order_customer_must_confirm": "refund_customer_confirm",
+    "order_supervisor_must_approve": "refund_await_supervisor",
+    "order_withdrawal_succeeded": "refund_withdrawn",
+    "voucher_submit_required": "voucher_submit_dispute",
+    "voucher_wait_for_review": "voucher_wait_review",
+    "voucher_contact_support_to_apply": "voucher_contact_support",
+}
+
+
+def evaluation_prompt(intake):
+    from evaluation.mixed_eval import EVAL_SYSTEM_PROMPT
+    import mixed_voucher
+
+    if not intake:
+        return EVAL_SYSTEM_PROMPT + mixed_voucher.INSTRUCTIONS
+    from customer_guidance import REPLY_INSTRUCTIONS
+    from refund_service import SINGLE_REFUND_INSTRUCTIONS
+
+    return ("你是中文售后客服。严格按业务工具的实际结果答复。券到店资料缺失时不能猜。"
+            "写操作回执不确定时先读取当前状态，本轮不要重复写入。"
+            + mixed_voucher.INSTRUCTIONS + SINGLE_REFUND_INSTRUCTIONS + REPLY_INSTRUCTIONS)
+
+
+def grade_next_steps(assertions, steps):
+    observed = {step["code"] for step in steps}
+    return {claim: (code in observed) == assertions[claim]
+            for claim, code in ACTION_CODES.items() if claim in assertions}
 
 
 def grade_turn(spec, actual, previous):
-    from task_eval_model import reason_matches
+    from evaluation.task_eval_model import reason_matches
 
     expected = sorted(spec["tickets"])
     actual_rows = sorted(actual["tickets"], key=lambda row: (row["order_id"], row["status"], row["reason"]))
@@ -32,11 +62,13 @@ def grade_turn(spec, actual, previous):
     facts = voucher.get("facts") or {}
     checks = {
         "refund_tickets": matched,
-        "voucher_route": [voucher.get("voucher_id"), voucher.get("decision"), facts.get("reason_code")] == spec["voucher"]
-        and not voucher.get("needs_recheck"),
         "no_unconfirmed_money_or_dispute": actual["executions"] == 0
         and actual["disputes"] == spec.get("seeded_disputes", 0),
     }
+    if "voucher" in spec:
+        checks["voucher_route"] = (not voucher if spec["voucher"] is None else
+            [voucher.get("voucher_id"), voucher.get("decision"), facts.get("reason_code")] == spec["voucher"]
+            and not voucher.get("needs_recheck"))
     for field in ("visit_step", "case_outcome"):
         if field in spec:
             checks[field] = facts.get(field) == spec[field]
@@ -61,7 +93,7 @@ def grade_fault(kind, rows, count):
             and event["ordinal"] == first["ordinal"] and event["attempt"] == 2 and event["code"] is None for event in events)
     if kind == "refund_receipt_lost":
         steps = [step for row in rows for step in row["tools"]]
-        lost = next((step for step in steps if step["name"] == "submit_refund_request"
+        lost = next((step for step in steps if step["name"] in {"submit_refund_request", "request_order_refund"}
                      and step["code"] == "outcome_unknown"), None)
         later = [step for step in steps if lost and step["batch"] > lost["batch"]]
         checks["unknown_write_receipt_visible"] = lost is not None
@@ -76,19 +108,24 @@ def run_event(event, user, seed_case):
     import voucher_disputes as vouchers
     from auth import User
 
-    if event == "merchant_matches":
-        evidence = [item for item in seed_case["assessment"]["evidence"] if item["source"] == "platform"]
-        platform, = evidence
+    if event == "resolved_then_merchant":
+        run_event("review_eligible", user, seed_case)
+        run_event("merchant_matches", user, seed_case)
+    elif event == "merchant_matches":
+        current = vouchers.detail(user, seed_case["id"])
+        platform, = [item for item in current["assessment"]["evidence"] if item["source"] == "platform"]
         result = vouchers.ingest_merchant_evidence(user.tenant_id, "held-out-feed", {
             "voucher_id": seed_case["voucher_id"], "source_version": 2, "record_id": "pos-holdout",
             "status": "redeemed", "redeem_ref": platform["redeem_ref"], "redeemed_at": platform["redeemed_at"],
         })
         if not result["case_rechecked"]:
             raise RuntimeError("merchant fixture did not revise the dispute")
-    elif event == "review_resolved":
+    elif event in {"review_resolved", "review_eligible", "review_redeemed"}:
         manager = User("acme-manager", "主管", user.tenant_id, frozenset({"approver"}))
-        vouchers.review(manager, seed_case["id"], seed_case["revision"], outcome="eligible_to_apply",
-                        note="合成场景复核结论，支持申请退款")
+        current = vouchers.detail(manager, seed_case["id"])
+        outcome = "redemption_confirmed" if event == "review_redeemed" else "eligible_to_apply"
+        note = "合成场景复核结论，确认已核销" if event == "review_redeemed" else "合成场景复核结论，支持申请退款"
+        vouchers.review(manager, seed_case["id"], current["revision"], outcome=outcome, note=note)
     else:
         raise ValueError(f"Unknown fixture event {event}")
 
@@ -96,19 +133,23 @@ def run_event(event, user, seed_case):
 def tool_log(messages):
     from langchain_core.messages import ToolMessage
     from agent_context import result_code
-    from plan_recovery_eval import tool_payload
+    from evaluation.plan_recovery_eval import tool_payload
 
     outcomes = {item.tool_call_id: item for item in messages if isinstance(item, ToolMessage)}
     rows = []
     for batch, item in enumerate(messages):
         for call in getattr(item, "tool_calls", []):
             result = outcomes.get(call["id"])
+            payload = tool_payload(result) if result else {}
+            observed = {key: payload[key] for key in ("voucher_id", "reason_code", "revision", "case_status",
+                "case_outcome", "needs_recheck", "next_step", "required_fields", "customer_next_action",
+                "redemption_finding", "order_id", "status", "required_role", "operation", "message") if key in payload}
             rows.append({"batch": batch, "name": call["name"], "args": call["args"],
-                         "code": result_code(result), "ticket_id": tool_payload(result).get("ticket_id") if result else None})
+                         "code": result_code(result), "ticket_id": payload.get("ticket_id"), "observed": observed})
     return rows
 
 
-def run_case(case, user, model, *, arrival):
+def run_case(case, user, model, *, arrival, intake=False):
     import api
     import db
     import agent_runtime
@@ -122,12 +163,13 @@ def run_case(case, user, model, *, arrival):
     from langchain.agents.middleware import AgentMiddleware
     from langchain_core.callbacks import BaseCallbackHandler
     from langgraph.checkpoint.memory import InMemorySaver
-    from mixed_eval import EVAL_SYSTEM_PROMPT
 
     case_fault = case.get("fault")
     injected = 0
     active_tool = ContextVar("holdout_active_tool", default=None)
-    original_lookup, original_prepare = orders.get_order, refund_service.prepare_ticket
+    original_lookup = orders.get_order
+    write_name = "request_order_refund" if intake else "prepare_ticket"
+    original_write = getattr(refund_service, write_name)
 
     def lookup(user, order_id):
         nonlocal injected
@@ -136,13 +178,14 @@ def run_case(case, user, model, *, arrival):
             raise TimeoutError("synthetic first order lookup timeout")
         return original_lookup(user, order_id)
 
-    def prepare(*args, **kwargs):
+    def write(*args, **kwargs):
         nonlocal injected
-        ticket, order = original_prepare(*args, **kwargs)
+        result = original_write(*args, **kwargs)
+        ticket = result if intake else result[0]
         if case_fault == "refund_receipt_lost" and not injected and ticket["order_id"] == "A400":
             injected += 1
             raise ConnectionResetError("synthetic response lost after refund ticket commit")
-        return ticket, order
+        return result
 
     class FaultScope(AgentMiddleware):
         def wrap_tool_call(self, request, handler):
@@ -168,16 +211,19 @@ def run_case(case, user, model, *, arrival):
                 usage["input_tokens"] += data["input_tokens"]
                 usage["output_tokens"] += data["output_tokens"]
 
-    prompt = EVAL_SYSTEM_PROMPT + mixed_voucher.INSTRUCTIONS
     graph = create_agent(model=model, checkpointer=InMemorySaver(),
         middleware=[FaultScope(), ContextBoundary(Limits(model_calls=8))],
         tools=[api.get_voucher_branch, api.observe_voucher_branch, api.choose_voucher_step, api.get_refund_task,
-               api.update_refund_task, api.get_order_info, api.submit_refund_request, api.withdraw_refund_request],
-        system_prompt=prompt)
+               api.update_refund_task, api.get_order_info,
+               *([api.withdraw_refund_request, api.request_order_refund] if intake
+                 else [api.submit_refund_request, api.withdraw_refund_request])],
+        system_prompt=evaluation_prompt(intake))
     seed_case = None
     if voucher := case.get("seed_dispute"):
         seed_case = vouchers.submit(user, voucher, "离线合成争议", store_code="CENTRAL",
                                    visit_at=datetime.fromisoformat(arrival))
+        if initial_event := case.get("initial_event"):
+            run_event(initial_event, user, seed_case)
     rows, events, usage = [], [], Counter()
     usage_callback = Usage()
     sid = "mixed-holdout-" + case["id"]
@@ -189,7 +235,7 @@ def run_case(case, user, model, *, arrival):
     error = None
     provider_status = None
     try:
-        with patch.object(orders, "get_order", lookup), patch.object(refund_service, "prepare_ticket", prepare):
+        with patch.object(orders, "get_order", lookup), patch.object(refund_service, write_name, write):
             for spec in case["turns"]:
                 if event := spec.get("event"):
                     run_event(event, user, seed_case)
@@ -199,7 +245,8 @@ def run_case(case, user, model, *, arrival):
                 before = usage.copy()
                 state = graph.invoke({"messages": [{"role": "user", "content": message}]}, {"configurable": {
                     "thread_id": sid, "tenant": user.tenant_id, "user_id": user.username, "roles": sorted(user.roles),
-                    "turn_id": turn_id, "turn_started": time.monotonic()}, "callbacks": [usage_callback]})
+                    "turn_id": turn_id, "turn_started": time.monotonic(), "user_message": message},
+                    "callbacks": [usage_callback]})
                 elapsed = round((time.perf_counter() - start) * 1000, 2)
                 messages = current_turn(state["messages"])
                 with db.session(orders.ORDERS_DB) as conn:
@@ -209,6 +256,9 @@ def run_case(case, user, model, *, arrival):
                     all_tickets = [dict(row) for row in conn.execute("""SELECT id, order_id, status, reason,
                         required_role, tenant_id, requester_id FROM refund_tickets ORDER BY id""")]
                     disputes = conn.execute("SELECT COUNT(*) FROM voucher_disputes").fetchone()[0]
+                    pending = [dict(t) for t in conn.execute("""SELECT * FROM refund_tickets
+                        WHERE thread_id=? AND tenant_id=? AND requester_id=? AND status='pending_approval'""",
+                        (sid, user.tenant_id, user.username))]
                 row = {"user": message, "event": event, "answer": messages[-1].text, "elapsed_ms": elapsed,
                        "boundary": messages[-1].response_metadata.get("boundary_reason"),
                        "usage": {field: usage[field] - before[field] for field in
@@ -216,6 +266,16 @@ def run_case(case, user, model, *, arrival):
                        "tools": tool_log(messages), "voucher": mixed_voucher.get(user, sid),
                        "tickets": all_tickets, "executions": executions, "disputes": disputes,
                        "runtime": [item for item in events if item["turn_id"] == turn_id]}
+                if intake:
+                    snapshot = api._conversation_payload(user, sid, [api._action_from_ticket(t, user) for t in pending])
+                    row["next_steps"] = snapshot["next_steps"]
+                    row["next_step_checks"] = grade_next_steps(spec.get("assertions", {}), row["next_steps"])
+                if seed_case is not None:
+                    current = vouchers.detail(user, seed_case["id"])
+                    row["seeded_case_state"] = {key: current[key] for key in
+                                                ("voucher_id", "status", "outcome", "revision")}
+                    row["seeded_case_state"]["merchant_record_count"] = sum(
+                        item["source"] == "merchant" for item in current["assessment"]["evidence"])
                 grade = grade_turn(dict(spec, seeded_disputes=int(seed_case is not None)), row, rows[-1] if rows else None)
                 grade["ticket_scope"] = all(t["tenant_id"] == user.tenant_id and t["requester_id"] == user.username
                                             for t in all_tickets)
@@ -244,30 +304,57 @@ def run_case(case, user, model, *, arrival):
 def write_report(path, report):
     partial = path.with_suffix(path.suffix + ".partial")
     partial.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    partial.replace(path)
+    for attempt in range(5):
+        try:
+            partial.replace(path)
+            return
+        except PermissionError:
+            # Windows readers can briefly hold the destination without delete sharing.
+            # Retry the file operation only, leaving the complete checkpoint on disk.
+            if attempt == 4:
+                raise
+            time.sleep(0.05 * 2 ** attempt)
+
+
+def load_dataset(path):
+    source = path.read_bytes()
+    data = json.loads(source)
+    cases = data["cases"]
+    if not cases:
+        raise ValueError("Dataset must contain at least one case")
+    identifiers = set()
+    for case in cases:
+        case_id = case["id"]
+        if not re.fullmatch(r"[a-z0-9_]{1,64}", case_id) or case_id in identifiers or not case["turns"]:
+            raise ValueError(f"Invalid, empty or duplicate case: {case_id}")
+        identifiers.add(case_id)
+        events = [case.get("initial_event"), *(turn.get("event") for turn in case["turns"])]
+        if any(event is not None and (event not in EVENTS or not case.get("seed_dispute")) for event in events):
+            raise ValueError(f"Unsupported or unseeded case event: {case_id}")
+    return source, data
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--with-model", action="store_true", required=True, help="Run the paid DeepSeek evaluation")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--dataset", type=Path, default=DATASET)
+    parser.add_argument("--intake", action="store_true", help="Use atomic refund intake and score server action guidance")
     args = parser.parse_args()
-    spec = DATASET.read_bytes()
-    dataset = json.loads(spec)
+    spec, dataset = load_dataset(args.dataset)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.open("x", encoding="utf-8").close()
     rows = []
     with tempfile.TemporaryDirectory(prefix="mixed-holdout-") as directory:
-        os.environ.update(AGENT_DATA_DIR=directory, PLAN_WORKER_ENABLED="0")
+        os.environ.update(AGENT_DATA_DIR=directory, PLAN_WORKER_ENABLED="0",
+                          LANGSMITH_TRACING="false", LANGCHAIN_TRACING_V2="false")
         import db
-        import mixed_voucher
         import orders
         import tickets
         import voucher_disputes
         from auth import User
         from langchain_openai import ChatOpenAI
-        from mixed_eval import EVAL_SYSTEM_PROMPT
-        from task_eval import provenance
+        from evaluation.task_eval import provenance
 
         model = ChatOpenAI(model=MODEL, base_url="https://api.deepseek.com", api_key=os.getenv("DEEPSEEK_API_KEY"),
                            temperature=0, timeout=35, max_retries=0,
@@ -276,9 +363,10 @@ def main():
         arrival = datetime.now(timezone.utc).replace(hour=4, minute=30, second=0, microsecond=0).isoformat()
         report = dict(dataset=dataset["id"], protocol=dataset["protocol"],
                       dataset_sha256=hashlib.sha256(spec).hexdigest(), model=MODEL, arrival=arrival,
-                      prompt_sha256=hashlib.sha256((EVAL_SYSTEM_PROMPT + mixed_voucher.INSTRUCTIONS).encode()).hexdigest(),
+                      prompt_sha256=hashlib.sha256(evaluation_prompt(args.intake).encode()).hexdigest(),
                       provenance=provenance(), planned_cases=len(dataset["cases"]), rows=rows,
-                      settings={"temperature": 0, "max_sdk_retries": 0, "model_calls_per_turn": 8})
+                      settings={"temperature": 0, "max_sdk_retries": 0, "model_calls_per_turn": 8,
+                                "atomic_intake": args.intake})
         write_report(args.output, report)
         for case in dataset["cases"]:
             root = Path(directory) / case["id"]
@@ -288,7 +376,7 @@ def main():
                 tickets.init_tickets_table()
                 orders.init_order_db()
                 voucher_disputes.seed_demo()
-                row = run_case(case, user, model, arrival=arrival)
+                row = run_case(case, user, model, arrival=arrival, intake=args.intake)
             finally:
                 db.release_all()
             rows.append(row)
